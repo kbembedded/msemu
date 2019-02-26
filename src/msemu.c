@@ -43,6 +43,7 @@
 #include <fcntl.h>
 #include <strings.h>
 #include <time.h>
+#include "rawcga.h"
 #include "z80em/Z80.h"
 #include "z80em/Z80IO.h"
 #include <SDL/SDL.h>
@@ -55,14 +56,7 @@ typedef unsigned short ushort;
 
 
 // This is the embedded font we need to print graphical text.
-// Windows expects no leading underscore in the symbol name.
-#ifdef WIN32
-	extern char binary_rawcga_bin_start;
-	char *rawcga_start = &binary_rawcga_bin_start;
-#else
-	extern char _binary_rawcga_bin_start;
-	char *rawcga_start = &_binary_rawcga_bin_start;
-#endif
+char *rawcga_start = &raw_cga_array[0];
 
 // Default screen size
 int SCREENWIDTH = 320;
