@@ -1,0 +1,1 @@
+* Remove dependency on z80emu source if possible for licensing reasons. May just need to contact dekogel@giganda.komkon.org and let them know that we're just using it. Locate any other Z80 emulator applications that could be used in this fashion
