@@ -17,16 +17,16 @@ endif
 # LSB_FIRST		Compile for a low-endian machine
 # X86_ASM			Use inline 80x86 assembly (GCC only)
 
-CFLAGS = -O2 -DLSB_FIRST -DX86_ASM
+CFLAGS = -O2 -DLSB_FIRST -DX86_ASM -DDEBUG
 
 
-msemu.exe: rawcga.o	msemu.o
-	$(CC) $(CFLAGS) z80em/Z80.o  rawcga.o msemu.o  -o $(OUTFILE) $(USINGMINGW) $(LIBS) 
+msemu.exe: msemu.o
+	$(CC) $(CFLAGS) z80em/Z80.o z80em/Z80Debug.o  msemu.o  -o $(OUTFILE) $(USINGMINGW) $(LIBS) 
 	
 msemu.o: msemu.c
 	$(CC) $(CFLAGS) -c msemu.c -o msemu.o
 
-rawcga.o: 
-	objcopy -I binary -O elf32-i386  --binary-architecture i386 rawcga.bin rawcga.o
+#rawcga.o: 
+#	objcopy -I binary -O elf32-i386  --binary-architecture i386 rawcga.bin rawcga.o
  
  
