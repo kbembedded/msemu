@@ -495,7 +495,7 @@ void writeDataflash(unsigned int translated_addr, byte val)
 	static uint8_t cycle;
 	static uint8_t cmd;
 
-	DebugOut("Addr 0x%X, val 0x%X, cycle 0x%X\n", translated_addr, val, cycle);
+	//DebugOut("Addr 0x%X, val 0x%X, cycle 0x%X\n", translated_addr, val, cycle);
 	// Limit to 512KB
 	translated_addr &= 0x7FFFF;
 
