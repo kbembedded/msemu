@@ -492,38 +492,63 @@ byte readDataflash(unsigned int translated_addr)
 //
 void writeDataflash(unsigned int translated_addr, byte val)
 {
+	static uint8_t cycle;
+	static uint8_t cmd;
+
+	DebugOut("Addr 0x%X, val 0x%X, cycle 0x%X\n", translated_addr, val, cycle);
 	// Limit to 512KB
 	translated_addr &= 0x7FFFF;
-	
-	if (dataflash_lastwrite > 0)
-	{
-		switch(dataflash_lastwrite)
-		{
-			case 0x20:							
-				translated_addr &= 0xFFFFFF00;
-				DebugOut("[%04X] * Dataflash Sector-Erase: 0x%X\n", Z80_GetPC(), translated_addr);
-				memset(dataflash + translated_addr, 0xFF, 256);
-				dataflash_updated = 1;
-				break;
-				
-			case 0x10:
-				DebugOut("[%04X] * Dataflash Byte-Program: 0x%X = %02X\n",Z80_GetPC(),translated_addr,val);
-				dataflash[translated_addr] = val;
-				dataflash_updated = 1;
-				break;
-				
-			case 0x30:
-				DebugOut("[%04X] * UNHANDLED DATAFLASH CHIP-ERASE\n");
-				break;
-				
-			default:
-				DebugOut("[%04X] * INVALID DATAFLASH COMMAND SEQUENCE: %02X %02X\n", dataflash_lastwrite, val);
+
+	if (!cycle) {
+		switch (val) {
+		  case 0xFF: /* Reset dataflash, single cycle */
+			DebugOut("[%04X] * Dataflash Reset\n", Z80_GetPC());
+			break;
+		  case 0x00: /* Not sure what this is for, but only one cycle? */
+			DebugOut("[%04X] * Dataflash cmd 0x00\n", Z80_GetPC());
+			break;
+		  case 0xC3: /* Not sure what this is for, but only one cycle? */
+			DebugOut("[%04X] * Dataflash cmd 0xC3\n", Z80_GetPC());
+			break;
+		  default:
+			cmd = val;
+			cycle++;
+			break;
 		}
-		// Make sure Read-ID command stays in buffer since read is required afterward
-		if (val != 0x90) dataflash_lastwrite = 0;
+	} else {
+		switch(cmd) {
+		  case 0x20: /* Sector erase */
+			translated_addr &= 0xFFFFFF00;
+			DebugOut("[%04X] * Dataflash Sector-Erase: 0x%X\n", Z80_GetPC(), translated_addr);
+			memset(dataflash + translated_addr, 0xFF, 256);
+			dataflash_updated = 1;
+			cycle = 0;
+			break;
+		  case 0x10: /* Byte program */
+			DebugOut("[%04X] * Dataflash Byte-Program: 0x%X = %02X\n",Z80_GetPC(),translated_addr,val);
+			dataflash[translated_addr] = val;
+			dataflash_updated = 1;
+			cycle = 0;
+			break;
+		  case 0x30: /* Chip erase */
+			/* XXX: This is actually two commands of 0x30 */
+			DebugOut("[%04X] * Dataflash Chip erase\n");
+			/* XXX: Fix this full chip size somewhere, macro? */
+			memset(dataflash, 0xFF, 512*2014);
+			dataflash_updated = 1;
+			cycle = 0;
+			break;
+		  case 0x90: /* Read ID */
+			DebugOut("[%04X] * Dataflash Read ID\n",Z80_GetPC());
+			cycle = 0;
+			break;
+		  default:
+			DebugOut("[%04X] * INVALID DATAFLASH COMMAND SEQUENCE: %02X %02X\n", Z80_GetPC(), 
+			  cmd, val);
+			cycle = 0;
+			break;
+		}
 	}
-	// Ignore Reset command
-	else if (val != 0xFF) dataflash_lastwrite = val;
 }
 
 
@@ -586,7 +611,7 @@ unsigned Z80_RDMEM(dword A)
 		
 	unsigned int translated_addr = newaddr + (current_page * 16384);
 		
-	switch(current_device)
+	switch(current_device & 0x0F)
 	{
 			case 0:
 				if (current_page >= 64) DebugOut("[%04X] * INVALID CODEFLASH PAGE: %d\n", Z80_GetPC(),current_page);
@@ -731,7 +756,7 @@ byte Z80_In (byte Port)
 	time( &theTime );
 	struct tm *rtc_time = localtime(&theTime);
 	
-	DebugOut("[%04X] * IO <- %04X - %02X\n", Z80_GetPC(), addr,ioports[addr]);
+	//DebugOut("[%04X] * IO <- %04X - %02X\n", Z80_GetPC(), addr,ioports[addr]);
 	
 	//if (addr < 5 || addr > 8) printf("* IO <- %04X - %02X\n",addr,ioports[addr]);
 	
@@ -841,7 +866,7 @@ void Z80_Out (byte Port,byte val)
 {
 	ushort addr = (ushort)Port;
 	
-	DebugOut("[%04X] * IO -> %04X - %02X\n",Z80_GetPC(), addr, val);
+	//DebugOut("[%04X] * IO -> %04X - %02X\n",Z80_GetPC(), addr, val);
 	
 	//if (addr < 5 || addr > 8) printf("* IO -> %04X - %02X\n",addr, val);
 		
