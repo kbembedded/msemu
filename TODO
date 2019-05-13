@@ -1,0 +1,6 @@
+Create Error printing functions that always exist
+Implement debug sections, e.g. codeflash, IO, dataflash, etc.
+Implement Z80 tracing
+Scale up to be roughly the same size physically as the screen is
+Remove extra window decorations? i.e. the top and bottom bars
+Color screen to look more like actual screen, there are examples of this in the yahoo group
