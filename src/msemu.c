@@ -256,6 +256,21 @@ void DebugOut(char *mystring,...)
 	va_end( argptr );	
 }
 
+void ErrorOut(char *mystring,...)
+{
+	va_list argptr;
+	va_start( argptr, mystring );
+
+	char newstring[1024];
+	vsprintf(newstring, mystring, argptr);
+
+	// If debug file open, print there
+	if (debugoutfile) fputs(newstring,debugoutfile);
+
+	printf("%s",newstring);
+
+	va_end( argptr );
+}
 
 
 
@@ -543,7 +558,7 @@ void writeDataflash(unsigned int translated_addr, byte val)
 			cycle = 0;
 			break;
 		  default:
-			DebugOut("[%04X] * INVALID DATAFLASH COMMAND SEQUENCE: %02X %02X\n", Z80_GetPC(), 
+			ErrorOut("[%04X] * INVALID DATAFLASH COMMAND SEQUENCE: %02X %02X\n", Z80_GetPC(), 
 			  cmd, val);
 			cycle = 0;
 			break;
@@ -614,12 +629,12 @@ unsigned Z80_RDMEM(dword A)
 	switch(current_device & 0x0F)
 	{
 			case 0:
-				if (current_page >= 64) DebugOut("[%04X] * INVALID CODEFLASH PAGE: %d\n", Z80_GetPC(),current_page);
+				if (current_page >= 64) ErrorOut("[%04X] * INVALID CODEFLASH PAGE: %d\n", Z80_GetPC(),current_page);
 				// Limit to 1MB
 				return codeflash[translated_addr & 0xFFFFF];
 
 			case 1:				
-				if (current_page >= 8) DebugOut("[%04X] * INVALID RAM PAGE: %d\n", Z80_GetPC(),current_page);				
+				if (current_page >= 8) ErrorOut("[%04X] * INVALID RAM PAGE: %d\n", Z80_GetPC(),current_page);				
 				return readRAM(translated_addr);
 
 			case 2:				
@@ -627,7 +642,7 @@ unsigned Z80_RDMEM(dword A)
 				break;
 
 			case 3:				
-				if (current_page >= 32) DebugOut("[%04X] * INVALID DATAFLASH PAGE: %d\n",Z80_GetPC(),current_page);				
+				if (current_page >= 32) ErrorOut("[%04X] * INVALID DATAFLASH PAGE: %d\n",Z80_GetPC(),current_page);				
 				return readDataflash(translated_addr);
 				
 			case 4:				
@@ -644,7 +659,7 @@ unsigned Z80_RDMEM(dword A)
 				break;
 				
 			default:
-				DebugOut("[%04X] * READ FROM UNKNOWN DEVICE: %d\n", Z80_GetPC(), current_device);
+				ErrorOut("[%04X] * READ FROM UNKNOWN DEVICE: %d\n", Z80_GetPC(), current_device);
 			
 	}
 
@@ -665,10 +680,11 @@ void Z80_WRMEM(dword A,byte val)
 	byte current_device;
 	
 	
+	/* XXX: Structure this a little cleaner */
 	// Slot 0x0000 - always codeflash page 0
 	if (addr < 16384)
 	{
-		DebugOut("CAN'T WRITE TO CODEFLASH SLOT 0\n"); 
+		ErrorOut("[%04X] * CAN'T WRITE TO CODEFLASH SLOT 0: 0x%X\n", Z80_GetPC(), addr);
 		return; 
 	}	
 
@@ -701,11 +717,11 @@ void Z80_WRMEM(dword A,byte val)
 	switch(current_device)
 	{
 			case 0:
-				DebugOut("WRITE TO CODEFLASH UNSUPPORTED\n");				
+				ErrorOut("[%04X] * WRITE TO CODEFLASH UNSUPPORTED\n", Z80_GetPC());
 				break;
 				
 			case 1:
-				if (current_page >= 8) DebugOut("[%04X] * INVALID RAM PAGE: %d\n", Z80_GetPC(), current_page);
+				if (current_page >= 8) ErrorOut("[%04X] * INVALID RAM PAGE: %d\n", Z80_GetPC(), current_page);
 				// Limit to 128KB				
 				writeRAM(translated_addr,val);				
 				break;
@@ -715,7 +731,7 @@ void Z80_WRMEM(dword A,byte val)
 				break;
 				
 			case 3:								
-				if (current_page >= 32) DebugOut("[%04X] * INVALID DATAFLASH PAGE: %d\n", Z80_GetPC(), current_page);				
+				if (current_page >= 32) ErrorOut("[%04X] * INVALID DATAFLASH PAGE: %d\n", Z80_GetPC(), current_page);				
 				writeDataflash(translated_addr,val);					
 				break;
 				
@@ -736,7 +752,7 @@ void Z80_WRMEM(dword A,byte val)
 				break;
 				
 			default:
-				DebugOut("[%04X] * WRITE TO UNKNOWN DEVICE: %d\n", Z80_GetPC(), current_device);
+				ErrorOut("[%04X] * WRITE TO UNKNOWN DEVICE: %d\n", Z80_GetPC(), current_device);
 			
 	}
 }
@@ -756,7 +772,7 @@ byte Z80_In (byte Port)
 	time( &theTime );
 	struct tm *rtc_time = localtime(&theTime);
 	
-	//DebugOut("[%04X] * IO <- %04X - %02X\n", Z80_GetPC(), addr,ioports[addr]);
+	DebugOut("[%04X] * IO <- %04X - %02X\n", Z80_GetPC(), addr,ioports[addr]);
 	
 	//if (addr < 5 || addr > 8) printf("* IO <- %04X - %02X\n",addr,ioports[addr]);
 	
@@ -866,7 +882,7 @@ void Z80_Out (byte Port,byte val)
 {
 	ushort addr = (ushort)Port;
 	
-	//DebugOut("[%04X] * IO -> %04X - %02X\n",Z80_GetPC(), addr, val);
+	DebugOut("[%04X] * IO -> %04X - %02X\n",Z80_GetPC(), addr, val);
 	
 	//if (addr < 5 || addr > 8) printf("* IO -> %04X - %02X\n",addr, val);
 		
