@@ -136,11 +136,6 @@ byte slot4000_device = 0;
 byte slot8000_page = 0;
 byte slot8000_device = 0;
 
-// This is used for writing to dataflash, to determine what Flash chip command to use
-byte dataflash_lastwrite = 0;
-
-
-
 // Default codeflash file to load
 char codeflash_filename_default[] = "codeflash.bin";
 
@@ -1005,7 +1000,7 @@ void Z80_Patch (Z80_Regs *Regs)
 // Handler fired when Z80_ICount hits 0
 int Z80_Interrupt(void)
 {
-	static icount = 0;
+	static int icount = 0;
 
 	// Interrupt occurs at 64hz.  So this counter reduces to 1 sec intervals
 	if (icount++ >= 64)
@@ -1097,7 +1092,6 @@ void resetMailstation()
 	memset(ram,0,128 * 1024);
 	poweroff = 0;
 	interrupts_active = 0;
-	dataflash_lastwrite = 0;
 	Z80_Reset();
 }
 
@@ -1478,6 +1472,9 @@ int main(int argc, char *argv[])
 
 							case SDLK_5:
 								LCD_color = 5;
+								break;
+							default:
+								; //Do nothing
 								break;
 						}
 					}
