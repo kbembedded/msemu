@@ -96,12 +96,6 @@ byte LCD_color = 3;  // green
 // Surface for the Mailstation LCD, will be 320x240
 SDL_Surface *lcd_surface;
 
-// Whether we're currently fullscreen or not
-int isfullscreen = 0;
-
-// Whether Mailstation LCD is scaled
-int LCD_2X = 0;
-
 // Surface to load CGA font data, for printing text with SDL
 SDL_Surface *cgafont_surface = NULL;
 
@@ -188,32 +182,6 @@ unsigned char hex2bcd (unsigned char x)
     return y;
 }
 
-
-
-
-//----------------------------------------------------------------------------
-//
-//  Outputs general messages
-//
-void myprintf(char *mystring, ...)
-{
-	if (runsilent) return;
-
-	va_list argptr;
-	va_start( argptr, mystring );
-
-	char newstring[1024];
-	vsprintf(newstring, mystring, argptr);
-
-	// Print to SDL surface
-	//printstring(newstring);
-
-	// Print to console
-	puts(newstring);
-
-	va_end( argptr );
-}
-
 //----------------------------------------------------------------------------
 //
 //  Outputs debug messages
@@ -278,36 +246,21 @@ void drawLCD()
 	outrect.w = SCREENWIDTH;
 	outrect.h = SCREENWIDTH;
 
-	if (LCD_2X)
-	{
-		// Double surface size to 640x480
-		SDL_Surface *lcd_surface2x = zoomSurface(lcd_surface, (double)2.0, (double)2.0, 0);
-		// If we don't clear the color key, it constantly overlays just the primary color during blit!
-		SDL_SetColorKey(lcd_surface2x, 0, 0);
+	// Double surface size to 640x480
+	SDL_Surface *lcd_surface2x = zoomSurface(lcd_surface, (double)2.0, (double)2.0, 0);
+	// If we don't clear the color key, it constantly overlays just the primary color during blit!
+	SDL_SetColorKey(lcd_surface2x, 0, 0);
 
-		// Switch output surface to this one
-		lcd_surface_temp = lcd_surface2x;
-	}
-
-	// If fullscreen but not 2X, center display
-	else if (isfullscreen && !LCD_2X)
-	{
-		outrect.x = 160;
-		outrect.y = 120;
-		outrect.w = 320;
-		outrect.h = 240;
-	}
+	// Switch output surface to this one
+	lcd_surface_temp = lcd_surface2x;
 
 	// Draw to screen
 	if (SDL_BlitSurface(lcd_surface_temp, NULL, screen, &outrect) != 0) printf("Error blitting LCD to screen: %s\n",SDL_GetError());
 	//SDL_UpdateRect(SDL_GetVideoSurface(), 0,0, SCREENWIDTH, SCREENHEIGHT);
 	SDL_Flip(screen);
 
-	if (LCD_2X)
-	{
-		// Dump 2x surface
-		SDL_FreeSurface(lcd_surface_temp);
-	}
+	// Dump 2x surface
+	SDL_FreeSurface(lcd_surface_temp);
 
 	// Screen has been updated, don't need to do it again until changes are made
 	lcd_lastupdate = 0;
@@ -1058,46 +1011,28 @@ void powerOff()
 }
 
 
-int setVideo(int width, int height, int fullscreen)
-{
-	int SDLflags = SDL_HWPALETTE;
-	//SDL_DOUBLEBUF | SDL_HWSURFACE
-
-	if (fullscreen) SDLflags |= SDL_FULLSCREEN;
-
-	// Setup screen
-	screen = SDL_SetVideoMode(width, height, 8, SDLflags);
-
-	if (screen == NULL) return 1;
-
-	// Write palette
-	if (SDL_SetPalette(screen, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 256) != 1) printf("Error setting palette\n");
-
-	isfullscreen = fullscreen;
-
-	return 0;
-}
-
-
 /* Main
  *
- *
+ * TODO:
+ *   Support newer SDL versions
  */
 int main(int argc, char *argv[])
 {
-
-	// Process arguments, when main() is used
 	int n;
-	for (n = 1; n < argc; n++)
-	{
-		// If doesn't start with /, then use as the codeflash image filename
-		if ((argv[n])[0] != '/') codeflash_filename = argv[n];
 
+	/* Process arguments */
+	/* TODO:
+	 *   Ability to specify codeflash and dataflash files. Currently
+	 *     assumes codeflash.bin and dataflash.bin
+	 *   Rework this to take more modern flags
+	 *   Rework runsilent flag and setup
+	 */
+	for (n = 1; n < argc; n++) {
 		// Print all DebugOut lines to console
-		else if (strcmp(argv[n],"/console") == 0) runsilent = 0;
+		if (strcmp(argv[n],"/console") == 0) runsilent = 0;
 
 		// Print all DebugOut lines to file
-		else if (strcmp(argv[n],"/debug") == 0) debugoutfile = fopen("debug.out","w");
+		if (strcmp(argv[n],"/debug") == 0) debugoutfile = fopen("debug.out","w");
 	}
 
 	SDL_Init( SDL_INIT_VIDEO );
@@ -1111,9 +1046,14 @@ int main(int argc, char *argv[])
 	colors[5].r = colors[5].g = 0xff;
 
 
-	// Setup screen
-	setVideo(SCREENWIDTH, SCREENHEIGHT, 0);
-
+	/* Set up SDL screen
+	 *
+	 * TODO:
+	 *   Worth implementing a resize feature?
+	 */
+	screen = SDL_SetVideoMode(SCREENWIDTH*2, SCREENHEIGHT*2, 8, SDL_HWPALETTE);
+	/*XXX: Check screen value */
+	if (SDL_SetPalette(screen, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 256) != 1) printf("Error setting palette\n");
 
 	// Set window caption
 	SDL_WM_SetCaption("Mailstation Emulator",NULL);
@@ -1296,44 +1236,6 @@ int main(int argc, char *argv[])
 					//else power_button = 1;
 				}
 				else power_button = 0;
-			}
-
-			// Toggle fullscreen
-			else if (event.key.keysym.sym == SDLK_F10 && event.type == SDL_KEYDOWN)
-			{
-				if (isfullscreen)
-				{
-					LCD_2X = 0;
-					setVideo(SCREENWIDTH, SCREENHEIGHT, 0);
-				}
-				else
-				{
-					LCD_2X = 1;
-					setVideo(SCREENWIDTH * 2, SCREENHEIGHT * 2, 1);
-				}
-
-				// Redraw any screen contents after switch
-				if (poweroff) powerOff();
-				else drawLCD();
-			}
-
-			// Toggle screen magnify
-			else if (event.key.keysym.sym == SDLK_F9 && event.type == SDL_KEYDOWN)
-			{
-				// Toggle LCD 2X size
-				clearLCD();
-				drawLCD();
-
-				// Toggle var
-				LCD_2X = !LCD_2X;
-
-				if (LCD_2X && !isfullscreen) setVideo(SCREENWIDTH * 2, SCREENHEIGHT * 2, 0);
-				else if (!LCD_2X && !isfullscreen) setVideo(SCREENWIDTH, SCREENHEIGHT, 0);
-
-				// Redisplay intro message if off
-				if (poweroff) powerOff();
-				// Otherwise trigger an LCD refresh
-				else lcd_lastupdate = SDL_GetTicks();
 			}
 
 			// Handle other input
