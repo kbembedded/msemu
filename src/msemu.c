@@ -28,14 +28,7 @@
 
 
 
-#ifdef WIN32
-	// Use at least XP, for AttachConsole
-	#define WINVER 0x0501
-	#include <windows.h>
-	#include <wincon.h>
-#else
-	typedef unsigned int DWORD;
-#endif
+typedef unsigned int DWORD;
 
 
 #include <stdio.h>
@@ -1029,58 +1022,6 @@ int Z80_Interrupt(void)
 
 //----------------------------------------------------------------------------
 //
-//  Convoluted process to connect STDIO to Windows console I/O
-//
-#ifdef WIN32
-void RedirectIOToConsole()
-{
-
-	// SDL hijacks STDIO and outputs to file.  This kills that (but annoyingly leaves the file behind).
-	// NOTE: The SDL library used to build the official EXE has this redirection disabled by default.
-	/*
-	freopen ("CONOUT$", "w", stdout);
-	freopen ("CONIN$", "w", stdin);
-	freopen ("CONOUT$", "w", stderr);
-	*/
-
-	// Allocate a console for this app (try to attach first due to SDL allocating a console).
-	//if (!AttachConsole(-1)) AllocConsole();
-	if (!AttachConsole(-1)) return;
-
-	HANDLE newConsoleInput = GetStdHandle(STD_INPUT_HANDLE);
-	HANDLE newConsoleOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-
-	int inFd = _open_osfhandle((long)newConsoleInput, _O_TEXT);
-	int outFd = _open_osfhandle((long)newConsoleOutput, _O_TEXT);
-
-	FILE* consoleIn = _fdopen(inFd, "r");
-	FILE* consoleOut = _fdopen(outFd, "w");
-
-	setvbuf(consoleIn, NULL, _IONBF, 0);
-	setvbuf(consoleOut, NULL, _IONBF, 0);
-
-	*stdin = *consoleIn;
-	*stdout = *consoleOut;
-
-	// Make cout, cin, etc, point to console as well.
-	// Except we're in standard C so forget this for now.
-	//ios::sync_with_stdio();*/
-
-}
-#else
-void RedirectIOToConsole()
-{
-	// If not in Windows, we don't need this crap.
-	return;
-}
-#endif
-
-
-
-
-
-//----------------------------------------------------------------------------
-//
 //  Resets Mailstation state
 //
 void resetMailstation()
@@ -1138,22 +1079,12 @@ int setVideo(int width, int height, int fullscreen)
 }
 
 
-//----------------------------------------------------------------------------
-//
-//  main() or WinMain()
-//
-//  WinMain is used to avoid SDL from overriding the main() function, which
-//  the SDLmain library then overrides STDIO and generates a useless stdout.txt
-//  which we don't want.
-//
-//  NOTE:  Version of SDL compiled into official msemu.exe now has this disabled.
-//
-//int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR szCmdLine, int sw)
+/* Main
+ *
+ *
+ */
 int main(int argc, char *argv[])
 {
-
-	// Redirect STDIO to Windows console
-	RedirectIOToConsole();
 
 	// Process arguments, when main() is used
 	int n;
@@ -1168,34 +1099,6 @@ int main(int argc, char *argv[])
 		// Print all DebugOut lines to file
 		else if (strcmp(argv[n],"/debug") == 0) debugoutfile = fopen("debug.out","w");
 	}
-
-
-	/*
-	// Crap to simulate argv and argc when using WinMain()
-	int argc;
-	LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-	if (argc > 1)
-	{
-		int n;
-		for (n = 1; n < argc; n++)
-		{
-			char tempstring[1024];
-			WideCharToMultiByte(CP_UTF8, (DWORD)NULL, argv[n], (int)-1, tempstring, sizeof(tempstring), NULL, NULL);
-
-			// If doesn't start with /, then use as the codeflash image filename
-			if (tempstring[0] != '/')
-			{
-				codeflash_filename = malloc(strlen(tempstring) + 1);
-				strcpy(codeflash_filename,tempstring);
-			}
-			//if (strcmp(tempstring,"/silent") == 0) runsilent = 1;
-			//if (strcmp(tempstring,"/debug") == 0) debugoutfile = fopen("debug.out","wb");
-
-		}
-	}
-	LocalFree(argv);
-	*/
-
 
 	SDL_Init( SDL_INIT_VIDEO );
 
