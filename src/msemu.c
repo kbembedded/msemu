@@ -99,9 +99,6 @@ SDL_Surface *lcd_surface;
 // Surface to load CGA font data, for printing text with SDL
 SDL_Surface *cgafont_surface = NULL;
 
-// This is the surface that all text print functions go on
-SDL_Surface *textsurface = NULL;
-
 // Cursor position for unfinished code to print text in SDL
 int cursorX = 0;
 int cursorY = 0;
@@ -373,7 +370,7 @@ void printcharXY(char mychar, int x, int y)
 	charoutarea.y = y;
 
 	//SDL_GetVideoSurface()
-	if (SDL_BlitSurface(cgafont_surface, &letterarea, textsurface, &charoutarea) != 0) printf("Error blitting text\n");
+	if (SDL_BlitSurface(cgafont_surface, &letterarea, lcd_surface, &charoutarea) != 0) printf("Error blitting text\n");
 }
 
 
@@ -389,7 +386,7 @@ void printstringXY(char *mystring, int x, int y)
 		mystring++;
 		// CGA font characters are 8x8
 		x+=8;
-		if (x > textsurface->w) { x = 0; y += 8; }
+		if (x > lcd_surface->w) { x = 0; y += 8; }
 	}
 }
 
@@ -399,7 +396,7 @@ void printstringXY(char *mystring, int x, int y)
 //
 void printstring_centered(char *mystring, int y)
 {
-	int surface_cols = textsurface->w / 8;
+	int surface_cols = lcd_surface->w / 8;
 	int x = (surface_cols - strlen(mystring)) / 2;
 	printstringXY(mystring, x * 8, y);
 }
@@ -417,8 +414,8 @@ void printstring(char *mystring)
 		printcharXY(*mystring,cursorX * 8, cursorY * 8);
 		mystring++;
 		cursorX++;
-		if (cursorX * 8 >= textsurface->w) { cursorX = 0; cursorY++; }
-		if (cursorY * 8 >= textsurface->h) cursorY = 0;
+		if (cursorX * 8 >= lcd_surface->w) { cursorX = 0; cursorY++; }
+		if (cursorY * 8 >= lcd_surface->h) cursorY = 0;
 	}
 }
 
@@ -1000,7 +997,6 @@ void powerOff()
 
 	// clear LCD
 	memset(lcd_data8, 0, 320*240);
-	textsurface = lcd_surface;
 	printstring_centered("Mailstation Emulator", 4 * 8);
 	printstring_centered("v0.1a", 5 * 8);
 	printstring_centered("Created by Jeff Bowman", 8 * 8);
@@ -1150,10 +1146,6 @@ int main(int argc, char *argv[])
 
 	// Set palette for LCD to global palette
 	if (SDL_SetPalette(lcd_surface, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 6) != 1) printf("Error setting palette on LCD\n");
-
-
-	// Print graphical text onto the LCD surface
-	textsurface = lcd_surface;
 
 	// Setup keyboard emulation
 	memset(keypress_array,0xff,sizeof(keypress_array));
