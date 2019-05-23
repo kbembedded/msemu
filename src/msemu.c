@@ -88,7 +88,7 @@ DWORD lcd_lastupdate = 0;
 SDL_Surface *screen;
 
 // Master palette
-SDL_Color colors[256];
+SDL_Color colors[6];
 
 // Default entry of color palette to draw Mailstation LCD with
 byte LCD_color = 3;  // green
@@ -1018,6 +1018,8 @@ void powerOff()
  */
 int main(int argc, char *argv[])
 {
+	SDL_Surface *cgafont_tmp = NULL;
+	SDL_Color fontcolors[2];
 	int n;
 
 	/* Process arguments */
@@ -1038,7 +1040,7 @@ int main(int argc, char *argv[])
 	SDL_Init( SDL_INIT_VIDEO );
 
 	// Setup some colors
-	memset(colors,0,sizeof(SDL_Color) * 256);
+	memset(colors,0,sizeof(SDL_Color) * 6);
 	colors[1].r = colors[1].g = colors[1].b = 0xFF;
 	colors[2].r = 0xff;
 	colors[3].g = 0xff;
@@ -1053,7 +1055,7 @@ int main(int argc, char *argv[])
 	 */
 	screen = SDL_SetVideoMode(SCREENWIDTH*2, SCREENHEIGHT*2, 8, SDL_HWPALETTE);
 	/*XXX: Check screen value */
-	if (SDL_SetPalette(screen, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 256) != 1) printf("Error setting palette\n");
+	if (SDL_SetPalette(screen, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 6) != 1) printf("Error setting palette\n");
 
 	// Set window caption
 	SDL_WM_SetCaption("Mailstation Emulator",NULL);
@@ -1061,21 +1063,20 @@ int main(int argc, char *argv[])
 
 
 	// Load embedded font for graphical print commands
-	SDL_Surface *cga_temp = SDL_CreateRGBSurfaceFrom((byte*)rawcga_start, 8, 2048, 1, 1,  0,0,0,0);
-	if (cga_temp == NULL) { printf("Error creating font surface\n"); return 1; }
+	cgafont_tmp = SDL_CreateRGBSurfaceFrom((byte*)rawcga_start, 8, 2048, 1, 1,  0,0,0,0);
+	if (cgafont_tmp == NULL) { printf("Error creating font surface\n"); return 1; }
 
 	// Setup font palette
-	SDL_Color fontcolors[2];
-	memset(fontcolors,0,sizeof(fontcolors));
-	// Use yellow
+	memset(fontcolors, 0, sizeof(fontcolors));
+	// Use yellow foreground, black background
 	fontcolors[1].r = fontcolors[1].g = 0xff;
 	// Write palette to surface
-	if (SDL_SetPalette(cga_temp, SDL_LOGPAL|SDL_PHYSPAL, fontcolors, 0, 2) != 1) printf("Error setting palette on font\n");
+	if (SDL_SetPalette(cgafont_tmp, SDL_LOGPAL|SDL_PHYSPAL, fontcolors, 0, 2) != 1) printf("Error setting palette on font\n");
 
 	// Convert the 1-bit font surface to match the display
-	cgafont_surface = SDL_DisplayFormat(cga_temp);
+	cgafont_surface = SDL_DisplayFormat(cgafont_tmp);
 	// Dump the 1-bit version
-	SDL_FreeSurface(cga_temp);
+	SDL_FreeSurface(cgafont_tmp);
 
 
 
@@ -1148,7 +1149,7 @@ int main(int argc, char *argv[])
 	if (lcd_surface == NULL) { printf("Error creating LCD surface\n"); return 1; }
 
 	// Set palette for LCD to global palette
-	if (SDL_SetPalette(lcd_surface, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 256) != 1) printf("Error setting palette on LCD\n");
+	if (SDL_SetPalette(lcd_surface, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 6) != 1) printf("Error setting palette on LCD\n");
 
 
 	// Print graphical text onto the LCD surface
