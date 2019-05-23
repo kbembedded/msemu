@@ -233,8 +233,7 @@ void ErrorOut(char *mystring,...)
 //
 void drawLCD()
 {
-	// Set output surface to 1x version for now
-	SDL_Surface *lcd_surface_temp = lcd_surface;
+	SDL_Surface *lcd_surface2x = NULL;
 
 	// Setup output rect to fill screen for now
 	SDL_Rect outrect;
@@ -244,20 +243,20 @@ void drawLCD()
 	outrect.h = SCREENWIDTH;
 
 	// Double surface size to 640x480
-	SDL_Surface *lcd_surface2x = zoomSurface(lcd_surface, (double)2.0, (double)2.0, 0);
+	lcd_surface2x = zoomSurface(lcd_surface, (double)2.0, (double)2.0, 0);
 	// If we don't clear the color key, it constantly overlays just the primary color during blit!
 	SDL_SetColorKey(lcd_surface2x, 0, 0);
 
-	// Switch output surface to this one
-	lcd_surface_temp = lcd_surface2x;
-
 	// Draw to screen
-	if (SDL_BlitSurface(lcd_surface_temp, NULL, screen, &outrect) != 0) printf("Error blitting LCD to screen: %s\n",SDL_GetError());
+	if (SDL_BlitSurface(lcd_surface2x, NULL, screen, &outrect) != 0) {
+		printf("Error blitting LCD to screen: %s\n",SDL_GetError());
+	}
+
 	//SDL_UpdateRect(SDL_GetVideoSurface(), 0,0, SCREENWIDTH, SCREENHEIGHT);
 	SDL_Flip(screen);
 
 	// Dump 2x surface
-	SDL_FreeSurface(lcd_surface_temp);
+	SDL_FreeSurface(lcd_surface2x);
 
 	// Screen has been updated, don't need to do it again until changes are made
 	lcd_lastupdate = 0;
@@ -312,17 +311,6 @@ void writeLCD(ushort newaddr, byte val, int lcdnum)
 	else	lcd_cas = val;
 
 }
-
-
-//----------------------------------------------------------------------------
-//
-//  Clears LCD display buffer (just the SDL surface data, not the Mailstation's)
-//
-void clearLCD()
-{
-	memset(lcd_data8, 0, 320*240);
-}
-
 
 
 //----------------------------------------------------------------------------
@@ -386,7 +374,7 @@ void printstringXY(char *mystring, int x, int y)
 		mystring++;
 		// CGA font characters are 8x8
 		x+=8;
-		if (x > lcd_surface->w) { x = 0; y += 8; }
+		if (x > lcd_surface->w) { x = 0; y += 8; } //Move to the next line
 	}
 }
 
@@ -976,7 +964,7 @@ int Z80_Interrupt(void)
 //
 void resetMailstation()
 {
-	clearLCD();
+	memset(lcd_data8, 0, 320*240);
 	memset(ioports,0,64 * 1024);
 	// NOTE: Mailstation normally retains RAM I believe.  But Mailstation OS
 	// won't warm-boot properly if we don't erase!  Not sure why yet.
