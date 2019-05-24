@@ -91,7 +91,8 @@ SDL_Surface *screen;
 SDL_Color colors[6];
 
 // Default entry of color palette to draw Mailstation LCD with
-byte LCD_color = 3;  // green
+byte LCD_fg_color = 3;  // LCD black
+byte LCD_bg_color = 2;  // LCD green
 
 // Surface for the Mailstation LCD, will be 320x240
 SDL_Surface *lcd_surface;
@@ -300,7 +301,7 @@ void writeLCD(ushort newaddr, byte val, int lcdnum)
 		int n;
 		for (n = 0; n < 8; n++)
 		{
-			lcd_data8[n + (x * 8) + (newaddr * 320)] = ((val >> n) & 1 ? LCD_color : 0);
+			lcd_data8[n + (x * 8) + (newaddr * 320)] = ((val >> n) & 1 ? LCD_fg_color : LCD_bg_color);
 		}
 
 		// Let main loop know to update screen with new LCD data
@@ -1025,11 +1026,12 @@ int main(int argc, char *argv[])
 
 	// Setup some colors
 	memset(colors,0,sizeof(SDL_Color) * 6);
-	colors[1].r = colors[1].g = colors[1].b = 0xFF;
-	colors[2].r = 0xff;
-	colors[3].g = 0xff;
-	colors[4].b = 0xff;
-	colors[5].r = colors[5].g = 0xff;
+	colors[0].r = 0x00; colors[0].g = 0x00; colors[0].b = 0x00; /* Black */
+	colors[1].r = 0x00; colors[1].g = 0xff; colors[1].b = 0x00; /* Green */
+	colors[2].r = 0x8d; colors[2].g = 0xb0; colors[2].b = 0x8c; /* LCD Off-Green */
+	colors[3].r = 0x46; colors[3].g = 0x43; colors[3].b = 0x32; /* LCD Pixel Black */
+	colors[4].r = 0x00; colors[4].g = 0x00; colors[4].b = 0xff; /* Blue */
+	colors[5].r = 0xff; colors[5].g = 0xff; colors[5].b = 0x00; /* Yellow */
 
 
 	/* Set up SDL screen
@@ -1231,34 +1233,30 @@ int main(int argc, char *argv[])
 						{
 							case SDLK_r:
 								printf("RESETTING...\n");
-								/*if (debugoutfile)
-								{
-									fclose(debugoutfile);
-									debugoutfile = fopen("debugreset.out","wb");
-								}*/
 								if (!poweroff) resetMailstation();
 								break;
 
 
-							case SDLK_1:
-								LCD_color = 1;
+							case SDLK_1: /* Emulate real LCD look */
+								LCD_fg_color = 3;
+								LCD_bg_color = 2;
 								break;
 
-							case SDLK_2:
-								LCD_color = 2;
+							case SDLK_2: /* Green on black */
+								LCD_fg_color = 1;
+								LCD_bg_color = 0;
 								break;
 
-							case SDLK_3:
-								LCD_color = 3;
+							case SDLK_3: /* Blue on black */
+								LCD_fg_color = 4;
+								LCD_bg_color = 0;
 								break;
 
-							case SDLK_4:
-								LCD_color = 4;
+							case SDLK_4: /* Yellow on black */
+								LCD_fg_color = 5;
+								LCD_bg_color = 0;
 								break;
 
-							case SDLK_5:
-								LCD_color = 5;
-								break;
 							default:
 								; //Do nothing
 								break;

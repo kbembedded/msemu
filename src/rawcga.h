@@ -2,9 +2,8 @@
  * Reproduced here as a far more portable array as opposed to the binary blob
  * that required some objcopy magic.
  *
- * Honestly have no idea what this array does exactly at this time.
- * However now that is it is here, it should be compatible with windows and
- * linux, as well as 32 and 64 bit platforms.
+ * As far as I can tell, this is a bitmap of various CGA font characters.
+ * I currently have no clue as to the layout, what it all means, etc.
  */
 
 char raw_cga_array[2048] = {
