@@ -30,12 +30,14 @@
 
 typedef unsigned int DWORD;
 
-
+#include <getopt.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <fcntl.h>
 #include <strings.h>
 #include <time.h>
+#include <unistd.h>
 #include "rawcga.h"
 #include "z80em/Z80.h"
 #include "z80em/Z80IO.h"
@@ -44,8 +46,10 @@ typedef unsigned int DWORD;
 
 typedef unsigned short ushort;
 
-#define LCD_LEFT 1
-#define LCD_RIGHT 2
+#define LCD_LEFT	1
+#define LCD_RIGHT	2
+
+#define MEBIBYTE	0x100000
 
 
 // This is the embedded font we need to print graphical text.
@@ -121,19 +125,8 @@ byte slot4000_device = 0;
 byte slot8000_page = 0;
 byte slot8000_device = 0;
 
-// Default codeflash file to load
-char codeflash_filename_default[] = "codeflash.bin";
-
-// Stores name of codeflash file if specified on command line
-char *codeflash_filename = codeflash_filename_default;
-
-// Default dataflash file to load/create
-char dataflash_filename[] = "dataflash.bin";
-
 // This handle is used for outputting all debug info to a file with /debug
 FILE *debugoutfile = NULL;
-
-
 
 // If this is true, then certain debug output isn't displayed to console (slows down emulation)
 int runsilent = 1;
@@ -1005,33 +998,82 @@ int main(int argc, char *argv[])
 {
 	SDL_Surface *cgafont_tmp = NULL;
 	SDL_Color fontcolors[2];
-	int n;
+	char *codeflash_path = "codeflash.bin";
+	char *dataflash_path = "dataflash.bin";
+	int opt_dataflash = 0, opt_codeflash = 0;
+	int c;
+
+	static struct option long_opts[] = {
+	  { "help", no_argument, NULL, 'h' },
+	  { "codeflash", required_argument, NULL, 'c' },
+	  { "dataflash", required_argument, NULL, 'd' },
+	  { NULL, no_argument, NULL, 0}
+	};
+
+	/* TODO:
+	 *   Rework main and break out in to smaller functions.
+	 *   Set up buffers and parse files
+	 *   Set up SDL calls
+	 *   Then get in to loop
+	 */
 
 	/* Process arguments */
 	/* TODO:
-	 *   Ability to specify codeflash and dataflash files. Currently
-	 *     assumes codeflash.bin and dataflash.bin
-	 *   Rework this to take more modern flags
 	 *   Rework runsilent flag and setup
 	 */
-	for (n = 1; n < argc; n++) {
-		// Print all DebugOut lines to console
-		if (strcmp(argv[n],"/console") == 0) runsilent = 0;
+	/* TODO:
+	 *   Implement the old debug flags below
+	 *   Implement some internal debugging? Z80 state machine, etc.
+	 *
+	 *      //for (n = 1; n < argc; n++) {
+         *      // Print all DebugOut lines to console
+	 *      //      if (strcmp(argv[n],"/console") == 0) runsilent = 0;
+	 *
+	 *      // Print all DebugOut lines to file
+	 *      //      if (strcmp(argv[n],"/debug") == 0) debugoutfile = fopen("debug.out","w");
+	 *      //}
+	 */
 
-		// Print all DebugOut lines to file
-		if (strcmp(argv[n],"/debug") == 0) debugoutfile = fopen("debug.out","w");
+	while ((c = getopt_long(argc, argv,
+	  "hc::d::", long_opts, NULL)) != -1) {
+		switch(c) {
+		  case 'c':
+			codeflash_path = malloc(strlen(optarg)+1);
+			/* TODO: Implement error handling here */
+			strncpy(codeflash_path, optarg, strlen(optarg)+1);
+			opt_codeflash = 1;
+			break;
+		  case 'd':
+			dataflash_path = malloc(strlen(optarg)+1);
+			/* TODO: Implement error handling here */
+			strncpy(dataflash_path, optarg, strlen(optarg)+1);
+			opt_dataflash = 1;
+			break;
+		  case 'h':
+		  default:
+			printf("Usage\n");
+			return 1;
+		}
 	}
 
 	SDL_Init( SDL_INIT_VIDEO );
 
-	// Setup some colors
+	/* Set up colors to be used by the LCD display from the MailStation */
+	/* TODO: Can this be done as a single 24bit quantity?
+	 */
 	memset(colors,0,sizeof(SDL_Color) * 6);
-	colors[0].r = 0x00; colors[0].g = 0x00; colors[0].b = 0x00; /* Black */
-	colors[1].r = 0x00; colors[1].g = 0xff; colors[1].b = 0x00; /* Green */
-	colors[2].r = 0x8d; colors[2].g = 0xb0; colors[2].b = 0x8c; /* LCD Off-Green */
-	colors[3].r = 0x46; colors[3].g = 0x43; colors[3].b = 0x32; /* LCD Pixel Black */
-	colors[4].r = 0x00; colors[4].g = 0x00; colors[4].b = 0xff; /* Blue */
-	colors[5].r = 0xff; colors[5].g = 0xff; colors[5].b = 0x00; /* Yellow */
+	/* Black */
+	colors[0].r = 0x00; colors[0].g = 0x00; colors[0].b = 0x00;
+	/* Green */
+	colors[1].r = 0x00; colors[1].g = 0xff; colors[1].b = 0x00;
+	/* LCD Off-Green */
+	colors[2].r = 0x8d; colors[2].g = 0xb0; colors[2].b = 0x8c;
+	/* LCD Pixel Black */
+	colors[3].r = 0x46; colors[3].g = 0x43; colors[3].b = 0x32;
+	/* Blue */
+	colors[4].r = 0x00; colors[4].g = 0x00; colors[4].b = 0xff;
+	/* Yellow */
+	colors[5].r = 0xff; colors[5].g = 0xff; colors[5].b = 0x00;
 
 
 	/* Set up SDL screen
@@ -1039,81 +1081,109 @@ int main(int argc, char *argv[])
 	 * TODO:
 	 *   Worth implementing a resize feature?
 	 */
-	screen = SDL_SetVideoMode(SCREENWIDTH*2, SCREENHEIGHT*2, 8, SDL_HWPALETTE);
+	screen = SDL_SetVideoMode(SCREENWIDTH*2, SCREENHEIGHT*2, 8,
+	  SDL_HWPALETTE);
 	/*XXX: Check screen value */
-	if (SDL_SetPalette(screen, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 6) != 1) printf("Error setting palette\n");
+	if (SDL_SetPalette(screen, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 6) != 1) {
+		printf("Error setting palette\n");
+	}
 
 	// Set window caption
-	SDL_WM_SetCaption("Mailstation Emulator",NULL);
+	SDL_WM_SetCaption("Mailstation Emulator", NULL);
 
 
 
+	/* XXX: This color set up is really strange, fontcolors sets up yellow
+	 * on black font. However, it seems to be linked with the colors
+	 * array above. If one were to remove colors[5], that causes the
+	 * font color to cange. I hope that moving to a newer SDL version
+	 * will improve this.
+	 */
 	// Load embedded font for graphical print commands
-	cgafont_tmp = SDL_CreateRGBSurfaceFrom((byte*)rawcga_start, 8, 2048, 1, 1,  0,0,0,0);
-	if (cgafont_tmp == NULL) { printf("Error creating font surface\n"); return 1; }
+	cgafont_tmp = SDL_CreateRGBSurfaceFrom((byte*)rawcga_start,
+	  8, 2048, 1, 1,  0,0,0,0);
+	if (cgafont_tmp == NULL) {
+		printf("Error creating font surface\n");
+		return 1;
+	}
 
 	// Setup font palette
 	memset(fontcolors, 0, sizeof(fontcolors));
 	// Use yellow foreground, black background
 	fontcolors[1].r = fontcolors[1].g = 0xff;
 	// Write palette to surface
-	if (SDL_SetPalette(cgafont_tmp, SDL_LOGPAL|SDL_PHYSPAL, fontcolors, 0, 2) != 1) printf("Error setting palette on font\n");
+	if (SDL_SetPalette(cgafont_tmp, SDL_LOGPAL|SDL_PHYSPAL, fontcolors,
+	  0, 2) != 1) {
+		printf("Error setting palette on font\n");
+	}
 
 	// Convert the 1-bit font surface to match the display
 	cgafont_surface = SDL_DisplayFormat(cgafont_tmp);
-	// Dump the 1-bit version
+	// Free the 1-bit version
 	SDL_FreeSurface(cgafont_tmp);
 
 
 
-
+	/* TODO: Add git tags to this, because thats neat */
 	printf("\nMailstation Emulator v0.1\n");
 	printf("Created by Jeff Bowman (fyberoptic@gmail.com)\n\n");
 
 
-	// read codeflash file
-	FILE *codeflash_file = fopen(codeflash_filename, "rb");
+	/* Open codeflash and dump it in to a buffer.
+	 * The codeflash should be exactly 1 MiB.
+	 * Its possible to have a short dump, where the remaining bytes are
+	 * assumed to be zero. I've seen this once before but there is no
+	 * good reason for it to actually happen.
+	 * It should never be longer either. If it is, we just pretend like
+	 * we didn't notice. This might be unwise behavior.
+	 * Free the file path buffer if it was malloc'ed
+	 */
+	FILE *codeflash_file = fopen(codeflash_path, "rb");
+	codeflash = (uint8_t *)calloc(sizeof(uint8_t), MEBIBYTE);
+	/* XXX: Check return */
 	if (codeflash_file)
 	{
-		fseek(codeflash_file,0,SEEK_END);
-		int filesize = ftell(codeflash_file);
-
-		printf("Loading Codeflash ROM:\n  %s (%d bytes)\n",codeflash_filename, filesize);
-		fseek(codeflash_file,0,SEEK_SET);
-		// Allocate the full 1MB
-		codeflash = (byte*)calloc(1024*1024,1);
-		// If file is too big, only read first 1MB
-		fread(codeflash , 1, (filesize > 1024*1024 ? 1024*1024 : filesize), codeflash_file);
-
+		fseek(codeflash_file, 0, SEEK_END);
+		printf("Loading Codeflash ROM:\n  %s (%ld bytes)\n",
+		  codeflash_path, ftell(codeflash_file));
+		fseek(codeflash_file, 0, SEEK_SET);
+		fread(codeflash, sizeof(uint8_t), MEBIBYTE, codeflash_file);
 		fclose(codeflash_file);
+	} else {
+		printf("Couldn't open codeflash file: %s\n", codeflash_path);
+		return 1;
 	}
-	else { printf("Couldn't open codeflash file: %s\n",codeflash_filename); return 1; }
+	if (opt_codeflash) free(codeflash_path);
 
 
-	// read dataflash file
-	FILE *dataflash_file = fopen(dataflash_filename, "rb");
+	/* Open dataflash and dump it in to a buffer.
+	 * The codeflash should be exactly 512 KiB.
+	 * Its possible to have a short dump, where the remaining bytes are
+	 * assumed to be zero. But it in practice shouldn't happen.
+	 * It should never be longer either. If it is, we just pretend like
+	 * we didn't notice. This might be unwise behavior.
+	 * If ./dataflash.bin does not exist, and --dataflash <path> is not
+	 * passed, then create a new dataflash in RAM which will get written
+	 * to ./dataflash.bin
+	 */
+	FILE *dataflash_file = fopen(dataflash_path, "rb");
+	dataflash = (uint8_t *)calloc(sizeof(uint8_t), MEBIBYTE/2);
+	/* XXX: Check return */
 	if (dataflash_file)
 	{
-		fseek(dataflash_file,0,SEEK_END);
-		int filesize = ftell(dataflash_file);
-
-		printf("Loading Dataflash ROM:\n  %s (%d bytes)\n",dataflash_filename, filesize);
-		fseek(dataflash_file,0,SEEK_SET);
-		// Allocate full 512KB
-		dataflash = (byte*)calloc(512*1024,1);
-		// If file is too big, only read first 512KB
-		fread(dataflash , 1, (filesize > 512*1024 ? 512*1024 : filesize), dataflash_file);
-
+		fseek(dataflash_file, 0, SEEK_END);
+		printf("Loading Dataflash ROM:\n  %s (%ld bytes)\n",
+		  dataflash_path, ftell(dataflash_file));
+		fseek(dataflash_file, 0, SEEK_SET);
+		fread(dataflash, sizeof(uint8_t), MEBIBYTE/2, dataflash_file);
 		fclose(dataflash_file);
-	}
-	// if one doesn't exist, then generate a fresh 512KB
-	else
-	{
-		printf("Generating new dataflash file: %s\n",dataflash_filename);
-		dataflash = calloc(1,512*1024);
+	} else if (!opt_dataflash) {
+		/* XXX: Generate random serial number? */
+		printf("Generating new dataflash image. Saving to file: %s\n",
+		  dataflash_path);
 	}
 
-	putchar('\n');
+	printf("\n");
 
 
 	// Allocate 128KB for system memory
@@ -1187,7 +1257,7 @@ int main(int argc, char *argv[])
 		if (dataflash_updated)
 		{
 			printf("Writing dataflash...\n");
-			FILE *df = fopen(dataflash_filename, "wb");
+			FILE *df = fopen(dataflash_path, "wb");
 			fwrite(dataflash,512*1024,1,df);
 			fclose(df);
 			dataflash_updated = 0;
