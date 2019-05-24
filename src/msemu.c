@@ -1067,9 +1067,9 @@ int main(int argc, char *argv[])
 	/* Green */
 	colors[1].r = 0x00; colors[1].g = 0xff; colors[1].b = 0x00;
 	/* LCD Off-Green */
-	colors[2].r = 0x8d; colors[2].g = 0xb0; colors[2].b = 0x8c;
+	colors[2].r = 0x9d; colors[2].g = 0xe0; colors[2].b = 0x8c;
 	/* LCD Pixel Black */
-	colors[3].r = 0x46; colors[3].g = 0x43; colors[3].b = 0x32;
+	colors[3].r = 0x26; colors[3].g = 0x21; colors[3].b = 0x14;
 	/* Blue */
 	colors[4].r = 0x00; colors[4].g = 0x00; colors[4].b = 0xff;
 	/* Yellow */
