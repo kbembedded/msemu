@@ -46,41 +46,28 @@ typedef unsigned int DWORD;
 
 typedef unsigned short ushort;
 
-#define LCD_LEFT	1
-#define LCD_RIGHT	2
-
-#define MEBIBYTE	0x100000
-
-
 // This is the embedded font we need to print graphical text.
 char *rawcga_start = &raw_cga_array[0];
 
 // Default screen size
-int SCREENWIDTH = 320;
-int SCREENHEIGHT = 240;
+const int SCREENWIDTH = 320;
+const int SCREENHEIGHT = 240;
 
+const int LCD_LEFT = 1;
+const int LCD_RIGHT = 2;
 
+const int MEBIBYTE = 0x100000;
 
-// Mailstation RAM - 128KB
-byte *ram = NULL;
-
-// Mailstation I/O ports - 64KB
-byte *ioports = NULL;
-
-// Mailstation codeflash - 1MB (depends on loaded codeflash file!)
-byte *codeflash = NULL;
-
-// Mailstation dataflash - 512KB (depends on loaded dataflash file!)
-byte *dataflash = NULL;
-
-
-
-// Mailstation left/right LCD halves - 4800 bytes each
-byte *lcd_left = NULL;
-byte *lcd_right = NULL;
-
-// Buffer for storing 8-bit version of LCD data (for drawing to screen)
-byte *lcd_data8 = NULL;
+struct mshw {
+	uint8_t *mem;
+	uint8_t *io;
+	uint8_t *lcd_dat8bit;
+	/* TODO: Might be able to remove this 1bit screen representation */
+	uint8_t *lcd_dat1bit;
+	uint8_t *codeflash;
+	uint8_t *dataflash;
+	uint8_t key_matrix[10];
+} ms;
 
 // Stores current Mailstation LCD column
 byte lcd_cas = 0;
@@ -134,9 +121,6 @@ int runsilent = 1;
 
 // Holds power button status (returned in P9.4)
 byte power_button = 0;
-
-// Simulates keyboard hardware matrix
-byte keypress_array[10];
 
 // This table translates PC scancodes to the Mailstation key matrix
 int keyTranslateTable[10][8] = {
@@ -265,15 +249,16 @@ void drawLCD()
 void writeLCD(ushort newaddr, byte val, int lcdnum)
 {
 	byte *lcd_ptr;
-	if (lcdnum == LCD_LEFT) lcd_ptr = lcd_left;
-	if (lcdnum == LCD_RIGHT) lcd_ptr = lcd_right;
+	if (lcdnum == LCD_LEFT) lcd_ptr = ms.lcd_dat1bit;
+	/* XXX: Fix the use of this magic number, replace with a const */
+	else lcd_ptr = &ms.lcd_dat1bit[4800];
 	if (!lcd_ptr) return;
 
 	// Wraps memory address if out of bounds
 	while (newaddr >= 240) newaddr -= 240;
 
 	// Check CAS bit on P2
-	if (ioports[2] & 8)
+	if (ms.io[2] & 8)
 	{
 		// Write data to currently selected LCD column.
 		// This is just used for reading back LCD contents to the Mailstation quickly.
@@ -294,7 +279,7 @@ void writeLCD(ushort newaddr, byte val, int lcdnum)
 		int n;
 		for (n = 0; n < 8; n++)
 		{
-			lcd_data8[n + (x * 8) + (newaddr * 320)] = ((val >> n) & 1 ? LCD_fg_color : LCD_bg_color);
+			ms.lcd_dat8bit[n + (x * 8) + (newaddr * 320)] = ((val >> n) & 1 ? LCD_fg_color : LCD_bg_color);
 		}
 
 		// Let main loop know to update screen with new LCD data
@@ -314,15 +299,16 @@ void writeLCD(ushort newaddr, byte val, int lcdnum)
 byte readLCD(ushort newaddr, int lcdnum)
 {
 	byte *lcd_ptr;
-	if (lcdnum == LCD_LEFT) lcd_ptr = lcd_left;
-	if (lcdnum == LCD_RIGHT) lcd_ptr = lcd_right;
+	if (lcdnum == LCD_LEFT) lcd_ptr = ms.lcd_dat1bit;
+	/* XXX: Fix the use of this magic number, replace with a const */
+	else lcd_ptr = &ms.lcd_dat1bit[4800];
 	if (!lcd_ptr) return 0;
 
 	// Wraps memory address if out of bounds
 	while (newaddr >= 240) newaddr -= 240;
 
 	// Check CAS bit on P2
-	if (ioports[2] & 8)
+	if (ms.io[2] & 8)
 	{
 		// Return data on currently selected LCD column
 		return lcd_ptr[newaddr + (lcd_cas * 240)];
@@ -415,7 +401,7 @@ void printstring(char *mystring)
 byte readDataflash(unsigned int translated_addr)
 {
 	// Limit to 512KB
-	return dataflash[translated_addr & 0x7FFFF];
+	return ms.dataflash[translated_addr & 0x7FFFF];
 }
 
 
@@ -455,13 +441,13 @@ void writeDataflash(unsigned int translated_addr, byte val)
 		  case 0x20: /* Sector erase */
 			translated_addr &= 0xFFFFFF00;
 			DebugOut("[%04X] * Dataflash Sector-Erase: 0x%X\n", Z80_GetPC(), translated_addr);
-			memset(dataflash + translated_addr, 0xFF, 256);
+			memset(&ms.dataflash[translated_addr], 0xFF, 256);
 			dataflash_updated = 1;
 			cycle = 0;
 			break;
 		  case 0x10: /* Byte program */
 			DebugOut("[%04X] * Dataflash Byte-Program: 0x%X = %02X\n",Z80_GetPC(),translated_addr,val);
-			dataflash[translated_addr] = val;
+			ms.dataflash[translated_addr] = val;
 			dataflash_updated = 1;
 			cycle = 0;
 			break;
@@ -469,7 +455,7 @@ void writeDataflash(unsigned int translated_addr, byte val)
 			/* XXX: This is actually two commands of 0x30 */
 			DebugOut("[%04X] * Dataflash Chip erase\n");
 			/* XXX: Fix this full chip size somewhere, macro? */
-			memset(dataflash, 0xFF, 512*2014);
+			memset(ms.dataflash, 0xFF, 512*2014);
 			dataflash_updated = 1;
 			cycle = 0;
 			break;
@@ -493,8 +479,7 @@ void writeDataflash(unsigned int translated_addr, byte val)
 //
 byte readRAM(unsigned int translated_addr)
 {
-	// Limit to 128KB
-	return ram[translated_addr & 0x1FFFF];
+	return ms.mem[translated_addr];
 }
 
 
@@ -504,8 +489,7 @@ byte readRAM(unsigned int translated_addr)
 //
 void writeRAM(unsigned int translated_addr, byte val)
 {
-	// Limit to 128KB
-	ram[translated_addr & 0x1FFFF] = val;
+	ms.mem[translated_addr] = val;
 }
 
 
@@ -523,10 +507,10 @@ unsigned Z80_RDMEM(dword A)
 
 
 	// Slot 0x0000 - always codeflash page 0
-	if (addr < 16384) return codeflash[addr];
+	if (addr < 16384) return ms.codeflash[addr];
 
 	// Slot 0xC000 - always RAM page 0
-	if (addr >= 49152) return ram[addr - 49152];
+	if (addr >= 49152) return ms.mem[addr-49152];
 
 	// Slot 0x4000
 	if (addr >= 16384 && addr < 32768)
@@ -551,7 +535,7 @@ unsigned Z80_RDMEM(dword A)
 			case 0:
 				if (current_page >= 64) ErrorOut("[%04X] * INVALID CODEFLASH PAGE: %d\n", Z80_GetPC(),current_page);
 				// Limit to 1MB
-				return codeflash[translated_addr & 0xFFFFF];
+				return ms.codeflash[translated_addr & 0xFFFFF];
 
 			case 1:
 				if (current_page >= 8) ErrorOut("[%04X] * INVALID RAM PAGE: %d\n", Z80_GetPC(),current_page);
@@ -611,7 +595,7 @@ void Z80_WRMEM(dword A,byte val)
 	// Slot 0xC000 - always RAM page 0
 	if (addr >= 49152)
 	{
-		ram[addr - 49152] = val;
+		ms.mem[addr-49152] = val;
 		return;
 	}
 
@@ -665,7 +649,7 @@ void Z80_WRMEM(dword A,byte val)
 				{
 					case 0x0001:
 						// Trigger modem interrupt
-						if (val & 2 && ioports[3] & 64) { printf("Triggering transmit empty interrupt\n"); interrupts_active |= 64; }
+						if (val & 2 && ms.io[3] & 64) { printf("Triggering transmit empty interrupt\n"); interrupts_active |= 64; }
 						break;
 				}*/
 
@@ -692,9 +676,9 @@ byte Z80_In (byte Port)
 	time( &theTime );
 	struct tm *rtc_time = localtime(&theTime);
 
-	DebugOut("[%04X] * IO <- %04X - %02X\n", Z80_GetPC(), addr,ioports[addr]);
+	DebugOut("[%04X] * IO <- %04X - %02X\n", Z80_GetPC(), addr,ms.io[addr]);
 
-	//if (addr < 5 || addr > 8) printf("* IO <- %04X - %02X\n",addr,ioports[addr]);
+	//if (addr < 5 || addr > 8) printf("* IO <- %04X - %02X\n",addr,ms.io[addr]);
 
 	switch (addr)
 	{
@@ -703,7 +687,7 @@ byte Z80_In (byte Port)
 		case 0x01:
 			{
 				// keyboard row is 10 bits wide, P1.x = low bits, P2.0-1 = high bits
-				unsigned short kbaddr = ioports[1] + ((ioports[2] & 3) << 8);
+				unsigned short kbaddr = ms.io[1] + ((ms.io[2] & 3) << 8);
 
 				// all returned bits should be high unless a key is pressed
 				byte kbresult = 0xFF;
@@ -712,7 +696,7 @@ byte Z80_In (byte Port)
 				int n;
 				for (n = 0; n < 10; n++)
 				{
-					if (!((kbaddr >> n) & 1)) kbresult &= keypress_array[n];
+					if (!((kbaddr >> n) & 1)) kbresult &= ms.key_matrix[n];
 				}
 
 				return kbresult;
@@ -725,7 +709,7 @@ byte Z80_In (byte Port)
 		case 0x1D:
 
 		case 0x02:
-			return ioports[addr];
+			return ms.io[addr];
 
 
 
@@ -748,7 +732,7 @@ byte Z80_In (byte Port)
 		case 0x06:
 		case 0x07:
 		case 0x08:
-			return ioports[addr];
+			return ms.io[addr];
 
 
 		// acknowledge power good + power button status
@@ -786,8 +770,8 @@ byte Z80_In (byte Port)
 			break;
 
 		default:
-			//printf("* UNKNOWN IO <- %04X - %02X\n",addr, ioports[addr]);
-			return ioports[addr];
+			//printf("* UNKNOWN IO <- %04X - %02X\n",addr, ms.io[addr]);
+			return ms.io[addr];
 	}
 
 }
@@ -815,38 +799,38 @@ void Z80_Out (byte Port,byte val)
 		case 0x2C:
 		case 0x2D:
 		case 0x1D:
-			ioports[addr] = val;
+			ms.io[addr] = val;
 			break;
 
 
 		// set interrupt masks
 		case 0x03:
 			interrupts_active &= val;
-			ioports[addr] = val;
+			ms.io[addr] = val;
 			break;
 
 		// set slot4000 page
 		case 0x05:
 			slot4000_page = val;
-			ioports[addr] = slot4000_page;
+			ms.io[addr] = slot4000_page;
 			break;
 
 		// set slot4000 device
 		case 0x06:
 			slot4000_device = val;
-			ioports[addr] = slot4000_device;
+			ms.io[addr] = slot4000_device;
 			break;
 
 		// set slot8000 page
 		case 0x07:
 			slot8000_page = val;
-			ioports[addr] = slot8000_page;
+			ms.io[addr] = slot8000_page;
 			break;
 
 		// set slot8000 device
 		case 0x08:
 			slot8000_device = val;
-			ioports[addr] = slot8000_device;
+			ms.io[addr] = slot8000_device;
 			break;
 
 		// check for hardware power off bit in P28
@@ -856,13 +840,13 @@ void Z80_Out (byte Port,byte val)
 				printf("POWER OFF\n");
 				powerOff();
 			}
-			ioports[addr] = val;
+			ms.io[addr] = val;
 			break;
 
 		// otherwise just save written value
 		default:
 			//printf("* UNKNOWN IO -> %04X - %02X\n",addr, val);
-			ioports[addr] = val;
+			ms.io[addr] = val;
 	}
 }
 
@@ -881,14 +865,14 @@ void generateKeyboardMatrix(int scancode, int eventtype)
 		{
 			if (scancode == keyTranslateTable[rows][cols])
 			{
-				//keypress_array[5] &= 0x7F;
+				//ms.key_matrix[5] &= 0x7F;
 				if (eventtype == SDL_KEYDOWN)
 				{
-					keypress_array[rows] &= ~((byte)1 << cols);
+					ms.key_matrix[rows] &= ~((byte)1 << cols);
 				}
 				else
 				{
-					keypress_array[rows] |= ((byte)1 << cols);
+					ms.key_matrix[rows] |= ((byte)1 << cols);
 				}
 			}
 		}
@@ -933,7 +917,7 @@ int Z80_Interrupt(void)
 		icount = 0;
 
 		// do time16 interrupt
-		if (ioports[3] & 0x10 && !(interrupts_active & 0x10))
+		if (ms.io[3] & 0x10 && !(interrupts_active & 0x10))
 		{
 			interrupts_active |= 0x10;
 			return Z80_NMI_INT;
@@ -941,7 +925,7 @@ int Z80_Interrupt(void)
 	}
 
 	// Trigger keyboard interrupt if necessary (64hz)
-	if (ioports[3] & 2 && !(interrupts_active & 2))
+	if (ms.io[3] & 2 && !(interrupts_active & 2))
 	{
 		interrupts_active |= 2;
 		return Z80_NMI_INT;
@@ -958,11 +942,11 @@ int Z80_Interrupt(void)
 //
 void resetMailstation()
 {
-	memset(lcd_data8, 0, 320*240);
-	memset(ioports,0,64 * 1024);
-	// NOTE: Mailstation normally retains RAM I believe.  But Mailstation OS
+	memset(ms.lcd_dat8bit, 0, 320*240);
+	memset(ms.io,0,64 * 1024);
+	// XXX: Mailstation normally retains RAM I believe.  But Mailstation OS
 	// won't warm-boot properly if we don't erase!  Not sure why yet.
-	memset(ram,0,128 * 1024);
+	memset(ms.mem,0,128 * 1024);
 	poweroff = 0;
 	interrupts_active = 0;
 	Z80_Reset();
@@ -978,7 +962,7 @@ void powerOff()
 	poweroff = 1;
 
 	// clear LCD
-	memset(lcd_data8, 0, 320*240);
+	memset(ms.lcd_dat8bit, 0, 320*240);
 	printstring_centered("Mailstation Emulator", 4 * 8);
 	printstring_centered("v0.1a", 5 * 8);
 	printstring_centered("Created by Jeff Bowman", 8 * 8);
@@ -988,6 +972,128 @@ void powerOff()
 	drawLCD();
 }
 
+/* Open flash file from path and pull its contents to memory
+ *
+ * XXX: Mostly not complete, still don't know exactly how all of these will
+ * work together.
+ */
+int flashtobuf(uint8_t *buf, const char *file_path, ssize_t sz)
+{
+	FILE *fd;
+
+	fd = fopen(file_path, "rb");
+	if (fd)
+	{
+		//fseek(codeflash_fd, 0, SEEK_END);
+		/* TODO: Add debugout print here */
+		//printf("Loading Codeflash ROM:\n  %s (%ld bytes)\n",
+		//  codeflash_path, ftell(codeflash_fd));
+		//fseek(codeflash_fd, 0, SEEK_SET);
+		fread(buf, sizeof(uint8_t), sz, fd);
+		fclose(fd);
+		return 0;
+	} else {
+		/* XXX: Move this outside of this function */
+		printf("Couldn't open flash file: %s\n", file_path);
+		return 1;
+	}
+}
+
+int buftoflash(uint8_t *buf, const char *file_path, ssize_t sz)
+{
+	FILE *fd;
+
+	/* XXX: Move this print to debug out */
+	printf("Writing dataflash...\n");
+	fd = fopen(file_path, "wb");
+	fwrite(buf, sizeof(uint8_t), sz, fd);
+	fclose(fd);
+	return 0;
+}
+
+/* XXX: This needs rework still*/
+void msemustartSDL(void)
+{
+	SDL_Surface *cgafont_tmp = NULL;
+	SDL_Color fontcolors[2];
+
+	SDL_Init( SDL_INIT_VIDEO );
+
+	/* Set up colors to be used by the LCD display from the MailStation */
+	/* TODO: Can this be done as a single 24bit quantity?
+	 */
+	memset(colors,0,sizeof(SDL_Color) * 6);
+	/* Black */
+	colors[0].r = 0x00; colors[0].g = 0x00; colors[0].b = 0x00;
+	/* Green */
+	colors[1].r = 0x00; colors[1].g = 0xff; colors[1].b = 0x00;
+	/* LCD Off-Green */
+	colors[2].r = 0x9d; colors[2].g = 0xe0; colors[2].b = 0x8c;
+	/* LCD Pixel Black */
+	colors[3].r = 0x26; colors[3].g = 0x21; colors[3].b = 0x14;
+	/* Blue */
+	colors[4].r = 0x00; colors[4].g = 0x00; colors[4].b = 0xff;
+	/* Yellow */
+	colors[5].r = 0xff; colors[5].g = 0xff; colors[5].b = 0x00;
+
+
+	/* Set up SDL screen
+	 *
+	 * TODO:
+	 *   Worth implementing a resize feature?
+	 */
+	screen = SDL_SetVideoMode(SCREENWIDTH*2, SCREENHEIGHT*2, 8,
+	  SDL_HWPALETTE);
+	/*XXX: Check screen value */
+	if (SDL_SetPalette(screen, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 6) != 1) {
+		printf("Error setting palette\n");
+	}
+
+	// Set window caption
+	SDL_WM_SetCaption("Mailstation Emulator", NULL);
+
+
+
+	/* XXX: This color set up is really strange, fontcolors sets up yellow
+	 * on black font. However, it seems to be linked with the colors
+	 * array above. If one were to remove colors[5], that causes the
+	 * font color to cange. I hope that moving to a newer SDL version
+	 * will improve this.
+	 */
+	// Load embedded font for graphical print commands
+	cgafont_tmp = SDL_CreateRGBSurfaceFrom((byte*)rawcga_start,
+	  8, 2048, 1, 1,  0,0,0,0);
+	if (cgafont_tmp == NULL) {
+		printf("Error creating font surface\n");
+		//return 1;
+	}
+
+	// Setup font palette
+	memset(fontcolors, 0, sizeof(fontcolors));
+	// Use yellow foreground, black background
+	fontcolors[1].r = fontcolors[1].g = 0xff;
+	// Write palette to surface
+	if (SDL_SetPalette(cgafont_tmp, SDL_LOGPAL|SDL_PHYSPAL, fontcolors,
+	  0, 2) != 1) {
+		printf("Error setting palette on font\n");
+	}
+
+	// Convert the 1-bit font surface to match the display
+	cgafont_surface = SDL_DisplayFormat(cgafont_tmp);
+	// Free the 1-bit version
+	SDL_FreeSurface(cgafont_tmp);
+
+
+	// Create 8-bit LCD surface for drawing to emulator screen
+	lcd_surface = SDL_CreateRGBSurfaceFrom(ms.lcd_dat8bit, 320, 240, 8, 320, 0,0,0,0);
+	if (lcd_surface == NULL) {
+		printf("Error creating LCD surface\n");
+		//return 1;
+	}
+
+	// Set palette for LCD to global palette
+	if (SDL_SetPalette(lcd_surface, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 6) != 1) printf("Error setting palette on LCD\n");
+}
 
 /* Main
  *
@@ -996,12 +1102,17 @@ void powerOff()
  */
 int main(int argc, char *argv[])
 {
-	SDL_Surface *cgafont_tmp = NULL;
-	SDL_Color fontcolors[2];
 	char *codeflash_path = "codeflash.bin";
+	FILE *codeflash_fd;
 	char *dataflash_path = "dataflash.bin";
+	FILE *dataflash_fd;
 	int opt_dataflash = 0, opt_codeflash = 0;
 	int c;
+	int execute_counter = 0;
+	int exitemu = 0;
+	uint32_t lasttick = SDL_GetTicks();
+	uint32_t currenttick;
+	SDL_Event event;
 
 	static struct option long_opts[] = {
 	  { "help", no_argument, NULL, 'h' },
@@ -1056,105 +1167,36 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	SDL_Init( SDL_INIT_VIDEO );
-
-	/* Set up colors to be used by the LCD display from the MailStation */
-	/* TODO: Can this be done as a single 24bit quantity?
-	 */
-	memset(colors,0,sizeof(SDL_Color) * 6);
-	/* Black */
-	colors[0].r = 0x00; colors[0].g = 0x00; colors[0].b = 0x00;
-	/* Green */
-	colors[1].r = 0x00; colors[1].g = 0xff; colors[1].b = 0x00;
-	/* LCD Off-Green */
-	colors[2].r = 0x9d; colors[2].g = 0xe0; colors[2].b = 0x8c;
-	/* LCD Pixel Black */
-	colors[3].r = 0x26; colors[3].g = 0x21; colors[3].b = 0x14;
-	/* Blue */
-	colors[4].r = 0x00; colors[4].g = 0x00; colors[4].b = 0xff;
-	/* Yellow */
-	colors[5].r = 0xff; colors[5].g = 0xff; colors[5].b = 0x00;
-
-
-	/* Set up SDL screen
+	/* Allocate and clear buffers.
+	 * Codeflash is 1 MiB
+	 * Dataflash is 512 KiB
+	 * RAM is 128 KiB
+	 * IO is 64 KiB (Not sure how much is necessary here)
+	 * LCD has two buffers, 8bit and 1bit. The Z80 emulation writes to the
+	 * 1bit buffer, this then translates to the 8bit buffer for SDLs use.
 	 *
-	 * TODO:
-	 *   Worth implementing a resize feature?
+	 * TODO: Add error checking on the buffer allocation
 	 */
-	screen = SDL_SetVideoMode(SCREENWIDTH*2, SCREENHEIGHT*2, 8,
-	  SDL_HWPALETTE);
-	/*XXX: Check screen value */
-	if (SDL_SetPalette(screen, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 6) != 1) {
-		printf("Error setting palette\n");
-	}
+	ms.codeflash = (uint8_t *)calloc(MEBIBYTE, sizeof(uint8_t));
+	ms.dataflash = (uint8_t *)calloc(MEBIBYTE/2, sizeof(uint8_t));
+	ms.mem = (uint8_t *)calloc(MEBIBYTE/8, sizeof(uint8_t));
+	ms.io = (uint8_t *)calloc(MEBIBYTE/16, sizeof(uint8_t));
+	ms.lcd_dat1bit = (uint8_t *)calloc(((SCREENWIDTH * SCREENHEIGHT) / 8),
+	  sizeof(uint8_t));
+	ms.lcd_dat8bit = (uint8_t *)calloc(  SCREENWIDTH * SCREENHEIGHT,
+	  sizeof(uint8_t));
 
-	// Set window caption
-	SDL_WM_SetCaption("Mailstation Emulator", NULL);
-
-
-
-	/* XXX: This color set up is really strange, fontcolors sets up yellow
-	 * on black font. However, it seems to be linked with the colors
-	 * array above. If one were to remove colors[5], that causes the
-	 * font color to cange. I hope that moving to a newer SDL version
-	 * will improve this.
-	 */
-	// Load embedded font for graphical print commands
-	cgafont_tmp = SDL_CreateRGBSurfaceFrom((byte*)rawcga_start,
-	  8, 2048, 1, 1,  0,0,0,0);
-	if (cgafont_tmp == NULL) {
-		printf("Error creating font surface\n");
-		return 1;
-	}
-
-	// Setup font palette
-	memset(fontcolors, 0, sizeof(fontcolors));
-	// Use yellow foreground, black background
-	fontcolors[1].r = fontcolors[1].g = 0xff;
-	// Write palette to surface
-	if (SDL_SetPalette(cgafont_tmp, SDL_LOGPAL|SDL_PHYSPAL, fontcolors,
-	  0, 2) != 1) {
-		printf("Error setting palette on font\n");
-	}
-
-	// Convert the 1-bit font surface to match the display
-	cgafont_surface = SDL_DisplayFormat(cgafont_tmp);
-	// Free the 1-bit version
-	SDL_FreeSurface(cgafont_tmp);
-
-
-
-	/* TODO: Add git tags to this, because thats neat */
-	printf("\nMailstation Emulator v0.1\n");
-	printf("Created by Jeff Bowman (fyberoptic@gmail.com)\n\n");
-
+	/* Set up keyboard emulation array */
+	memset(ms.key_matrix, 0xff, sizeof(ms.key_matrix));
 
 	/* Open codeflash and dump it in to a buffer.
 	 * The codeflash should be exactly 1 MiB.
 	 * Its possible to have a short dump, where the remaining bytes are
-	 * assumed to be zero. I've seen this once before but there is no
-	 * good reason for it to actually happen.
+	 * assumed to be zero.
 	 * It should never be longer either. If it is, we just pretend like
 	 * we didn't notice. This might be unwise behavior.
-	 * Free the file path buffer if it was malloc'ed
 	 */
-	FILE *codeflash_file = fopen(codeflash_path, "rb");
-	codeflash = (uint8_t *)calloc(sizeof(uint8_t), MEBIBYTE);
-	/* XXX: Check return */
-	if (codeflash_file)
-	{
-		fseek(codeflash_file, 0, SEEK_END);
-		printf("Loading Codeflash ROM:\n  %s (%ld bytes)\n",
-		  codeflash_path, ftell(codeflash_file));
-		fseek(codeflash_file, 0, SEEK_SET);
-		fread(codeflash, sizeof(uint8_t), MEBIBYTE, codeflash_file);
-		fclose(codeflash_file);
-	} else {
-		printf("Couldn't open codeflash file: %s\n", codeflash_path);
-		return 1;
-	}
-	if (opt_codeflash) free(codeflash_path);
-
+	flashtobuf(ms.codeflash, codeflash_path, MEBIBYTE);
 
 	/* Open dataflash and dump it in to a buffer.
 	 * The codeflash should be exactly 512 KiB.
@@ -1166,116 +1208,87 @@ int main(int argc, char *argv[])
 	 * passed, then create a new dataflash in RAM which will get written
 	 * to ./dataflash.bin
 	 */
-	FILE *dataflash_file = fopen(dataflash_path, "rb");
-	dataflash = (uint8_t *)calloc(sizeof(uint8_t), MEBIBYTE/2);
-	/* XXX: Check return */
-	if (dataflash_file)
-	{
-		fseek(dataflash_file, 0, SEEK_END);
-		printf("Loading Dataflash ROM:\n  %s (%ld bytes)\n",
-		  dataflash_path, ftell(dataflash_file));
-		fseek(dataflash_file, 0, SEEK_SET);
-		fread(dataflash, sizeof(uint8_t), MEBIBYTE/2, dataflash_file);
-		fclose(dataflash_file);
-	} else if (!opt_dataflash) {
-		/* XXX: Generate random serial number? */
+	flashtobuf(ms.dataflash, dataflash_path, MEBIBYTE/2);
+	/* XXX: Check return of this func, create new dataflash image! */
+#if 0
+	if (!ret && !opt_dataflash) {
+		generate new dataflash image
+		XXX: Generate random serial number?
 		printf("Generating new dataflash image. Saving to file: %s\n",
 		  dataflash_path);
-	}
-
-	printf("\n");
+#endif
 
 
-	// Allocate 128KB for system memory
-	ram = (byte *)calloc(131072, 1);
+	/* TODO: Add git tags to this, because thats neat */
+	printf("\nMailstation Emulator v0.1\n");
 
-	// Allocate 64KB for I/O port storage (z80em doesn't use more than 256 though apparently)
-	ioports = (byte *)calloc(65536,1);
-
-	// Allocate hardware buffers for LCD
-	lcd_left = (byte *)calloc(4800,1);
-	lcd_right = (byte *)calloc(4800,1);
+	msemustartSDL();
 
 
-	// Generate an 8-bit 320x240 buffer for LCD
-	lcd_data8 = (byte *)calloc(76800,1);
-
-	// Create 8-bit LCD surface for drawing to emulator screen
-	lcd_surface = SDL_CreateRGBSurfaceFrom(lcd_data8, 320, 240, 8, 320, 0,0,0,0);
-	if (lcd_surface == NULL) { printf("Error creating LCD surface\n"); return 1; }
-
-	// Set palette for LCD to global palette
-	if (SDL_SetPalette(lcd_surface, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 6) != 1) printf("Error setting palette on LCD\n");
-
-	// Setup keyboard emulation
-	memset(keypress_array,0xff,sizeof(keypress_array));
 
 
-	// Setup Z80 emulation
-	Z80_Running = 1;			/* When 0, emulation terminates                */
-	Z80_ICount = 0;			/* T-state count                               */
-	Z80_IRQ = Z80_IGNORE_INT;	/* Current IRQ status. Checked after EI occurs */
-	// Mailstation OS runs at 12mhz, so divide by 64 for keyboard interrupt rate
-	Z80_IPeriod = 187500;		/* Number of T-states per interrupt            */
-
-
-	// Reset CPU state
-	Z80_Reset();
-
-	// Used for emulation timing
-	int execute_counter = 0;
-
-	// When this != 0, program loop exits
-	int exitemu = 0;
-
-	DWORD lasttick = SDL_GetTicks();
-	DWORD currenttick;
+	/* Set up and start Z80 emulation */
+	Z80_Reset();			/* Reset CPU state */
+	Z80_Running = 1;		/* When 0, emulation terminates */
+	Z80_ICount = 0;			/* T-state count */
+	Z80_IRQ = Z80_IGNORE_INT;	/* Current IRQ status. */
+	/* MS runs at 12 MHz, divide by 64 for KB IRQ rate */
+	Z80_IPeriod = 187500;		/* Number of T-states per interrupt */
 
 	// Display startup message
 	powerOff();
 
+	lasttick = SDL_GetTicks();
+
 	while (!exitemu)
 	{
-
 		currenttick = SDL_GetTicks();
 
-		// Do CPU cycles
-		if (!poweroff)
-		{
+		/* Let the Z80 process code at regular intervals */
+		if (!poweroff) {
+			/* XXX: Can replace with SDL_TICKS_PASSED with new
+			 * SDL version.
+			 */
 			execute_counter += currenttick - lasttick;
-			if (execute_counter > 15) { execute_counter = 0; Z80_Execute(); }
+			if (execute_counter > 15) {
+				execute_counter = 0;
+				Z80_Execute();
+			}
 		}
 
-		// Update LCD if modified (at 20ms rate)
-		if ( (lcd_lastupdate != 0) && (currenttick - lcd_lastupdate >= 20) )
-		{
-			//printf("[%d] UPDATE LCD\n", currenttick);
+		/* Update LCD if modified (at 20ms rate) */
+		/* TODO: Check over this whole process logic */
+		/* NOTE: Cursory glance suggests the screen updates 20ms after
+		 * the screen array changed.
+		 */
+		if ((lcd_lastupdate != 0) &&
+		  (currenttick - lcd_lastupdate >= 20)) {
 			drawLCD();
 		}
 
-		// Write dataflash out if modified
-		if (dataflash_updated)
-		{
-			printf("Writing dataflash...\n");
-			FILE *df = fopen(dataflash_path, "wb");
-			fwrite(dataflash,512*1024,1,df);
-			fclose(df);
+		/* Write dataflash buffer to disk if it was modified */
+		if (dataflash_updated) {
+			buftoflash(ms.dataflash, dataflash_path, MEBIBYTE/2);
+			/* XXX: Check return value */
 			dataflash_updated = 0;
 		}
 
-
+		/* XXX: All of this needs to be reworked to be far more
+		 * efficient.
+		 */
 		// Check SDL events
-		SDL_Event event;
-		while (SDL_PollEvent( &event ))
+		while (SDL_PollEvent(&event))
 		{
-			// Exit if asked
-			if( event.type == SDL_QUIT ) exitemu = 1;
+			/* Exit if SDL quits, or Escape key was pushed */
+			if ((event.type == SDL_QUIT) ||
+			  ((event.type == SDL_KEYDOWN) &&
+			    (event.key.keysym.sym == SDLK_ESCAPE))) {
+				exitemu = 1;
+			}
 
-			// Exit on escape key
-			else if( event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE ) exitemu = 1;
-
-			// Emulate power button with F12 key
-			else if (event.key.keysym.sym == SDLK_F12)
+			/* Emulate power button with F12 key */
+			/* XXX: Figure out why this requires a double press? */
+			if (event.key.keysym.sym == SDLK_F12)
 			{
 				if (event.type == SDL_KEYDOWN)
 				{
@@ -1286,60 +1299,34 @@ int main(int argc, char *argv[])
 
 						resetMailstation();
 					}
-					//else power_button = 1;
+				} else {
+					power_button = 0;
 				}
-				else power_button = 0;
 			}
 
-			// Handle other input
-			else if ( event.type == SDL_KEYDOWN || event.type == SDL_KEYUP )
-			{
-				// Process keys pressed while right control held
+			/* Handle other input events */
+			if ((event.type == SDL_KEYDOWN) ||
+			  (event.type == SDL_KEYUP)) {
+				/* Keys pressed whie right ctrl is held */
 				if (event.key.keysym.mod & KMOD_RCTRL)
 				{
 					if (event.type == SDL_KEYDOWN)
 					{
-						switch (event.key.keysym.sym)
-						{
-							case SDLK_r:
-								printf("RESETTING...\n");
-								if (!poweroff) resetMailstation();
-								break;
-
-
-							case SDLK_1: /* Emulate real LCD look */
-								LCD_fg_color = 3;
-								LCD_bg_color = 2;
-								break;
-
-							case SDLK_2: /* Green on black */
-								LCD_fg_color = 1;
-								LCD_bg_color = 0;
-								break;
-
-							case SDLK_3: /* Blue on black */
-								LCD_fg_color = 4;
-								LCD_bg_color = 0;
-								break;
-
-							case SDLK_4: /* Yellow on black */
-								LCD_fg_color = 5;
-								LCD_bg_color = 0;
-								break;
-
-							default:
-								; //Do nothing
-								break;
+						switch (event.key.keysym.sym) {
+						  /* Reset whole system */
+						  case SDLK_r:
+							if (!poweroff)
+							  resetMailstation();
+							break;
 						}
 					}
+				} else {
+					/* Proces the key for the MS */
+					generateKeyboardMatrix(
+					  event.key.keysym.sym, event.type);
 				}
-
-				// Process keys for keyboard matrix emulation
-				else generateKeyboardMatrix(event.key.keysym.sym, event.type);
 			}
 		}
-
-
 		// Update SDL ticks
 		lasttick = currenttick;
 	}
