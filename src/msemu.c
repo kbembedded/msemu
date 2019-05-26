@@ -59,7 +59,7 @@ const int LCD_RIGHT = 2;
 const int MEBIBYTE = 0x100000;
 
 struct mshw {
-	uint8_t *mem;
+	uint8_t *ram;
 	uint8_t *io;
 	uint8_t *lcd_dat8bit;
 	/* TODO: Might be able to remove this 1bit screen representation */
@@ -388,47 +388,65 @@ void printstring(char *mystring)
 }
 
 
-
-
-
-//----------------------------------------------------------------------------
-//
-//  This function emulates reading from a 28SF040 flash chip.
-//
-//  NOTE: It currently does not support Data Protect or Data Unprotect
-//  sequences.
-//
-byte readDataflash(unsigned int translated_addr)
+/* Return a byte from codeflash buffer
+ *
+ * TODO:
+ *   Write better documentation on this
+ *   Add debug hook
+ *   Ensure this is used in multiple places when reading from codeflash
+ */
+inline uint8_t readCodeFlash(uint32_t translated_addr)
 {
-	// Limit to 512KB
-	return ms.dataflash[translated_addr & 0x7FFFF];
+	return ms.codeflash[translated_addr];
+}
+
+/* Write a byte to codeflash buffer
+ *
+ * TODO:
+ *   Implement writing to codeflash
+ */
+inline void writeCodeFlash(uint32_t translated_addr)
+{
+	return;
+}
+
+/* Return a byte from dataflash
+ *
+ * Unlike the write path, this does not need to directly emulate 28SF040 read
+ * cycles. We just need to return data.
+ *
+ * TODO: Add debugging potential here
+ */
+inline byte readDataflash(unsigned int translated_addr)
+{
+	return ms.dataflash[translated_addr];
 }
 
 
-//----------------------------------------------------------------------------
-//
-//  This function emulates writing to a 28SF040 flash chip.
-//
-//  NOTE: It currently supports Sector-Erase and Byte-Program commands ONLY.
-//
+/* Write a byte to dataflash while handling commands intended for 28SF040 flash
+ *
+ * The Z80 will output commands and an addres. In order to properly handle a
+ * write, we have to interpret these commands like it were an actualy 28SF040.
+ *
+ * Software data protection status is _NOT_ implemented and seems to not be
+ * necessary in normal application flow.
+ *
+ * TODO: Add debugging hook here.
+ */
 void writeDataflash(unsigned int translated_addr, byte val)
 {
 	static uint8_t cycle;
 	static uint8_t cmd;
-
-	//DebugOut("Addr 0x%X, val 0x%X, cycle 0x%X\n", translated_addr, val, cycle);
-	// Limit to 512KB
-	translated_addr &= 0x7FFFF;
 
 	if (!cycle) {
 		switch (val) {
 		  case 0xFF: /* Reset dataflash, single cycle */
 			DebugOut("[%04X] * Dataflash Reset\n", Z80_GetPC());
 			break;
-		  case 0x00: /* Not sure what this is for, but only one cycle? */
+		  case 0x00: /* Not sure what cmd is, but only one cycle? */
 			DebugOut("[%04X] * Dataflash cmd 0x00\n", Z80_GetPC());
 			break;
-		  case 0xC3: /* Not sure what this is for, but only one cycle? */
+		  case 0xC3: /* Not sure what cmd is, but only one cycle? */
 			DebugOut("[%04X] * Dataflash cmd 0xC3\n", Z80_GetPC());
 			break;
 		  default:
@@ -438,66 +456,69 @@ void writeDataflash(unsigned int translated_addr, byte val)
 		}
 	} else {
 		switch(cmd) {
-		  case 0x20: /* Sector erase */
+		  case 0x20: /* Sector erase, execute cmd is 0xD0 */
+			if (val != 0xD0) break;
 			translated_addr &= 0xFFFFFF00;
-			DebugOut("[%04X] * Dataflash Sector-Erase: 0x%X\n", Z80_GetPC(), translated_addr);
-			memset(&ms.dataflash[translated_addr], 0xFF, 256);
+			DebugOut("[%04X] * Dataflash Sector-Erase: 0x%X\n",
+			  Z80_GetPC(), translated_addr);
+			memset(&ms.dataflash[translated_addr], 0xFF, 0x100);
 			dataflash_updated = 1;
-			cycle = 0;
 			break;
 		  case 0x10: /* Byte program */
-			DebugOut("[%04X] * Dataflash Byte-Program: 0x%X = %02X\n",Z80_GetPC(),translated_addr,val);
+			DebugOut("[%04X] * Dataflash Byte-Prog: 0x%X = %02X\n",
+			  Z80_GetPC(),translated_addr,val);
 			ms.dataflash[translated_addr] = val;
 			dataflash_updated = 1;
-			cycle = 0;
 			break;
-		  case 0x30: /* Chip erase */
-			/* XXX: This is actually two commands of 0x30 */
+		  case 0x30: /* Chip erase, execute cmd is 0x30 */
+			if (val != 0x30) break;
 			DebugOut("[%04X] * Dataflash Chip erase\n");
-			/* XXX: Fix this full chip size somewhere, macro? */
-			memset(ms.dataflash, 0xFF, 512*2014);
+			memset(ms.dataflash, 0xFF, MEBIBYTE/2);
 			dataflash_updated = 1;
-			cycle = 0;
 			break;
 		  case 0x90: /* Read ID */
-			DebugOut("[%04X] * Dataflash Read ID\n",Z80_GetPC());
-			cycle = 0;
+			DebugOut("[%04X] * Dataflash Read ID\n", Z80_GetPC());
 			break;
 		  default:
-			ErrorOut("[%04X] * INVALID DATAFLASH COMMAND SEQUENCE: %02X %02X\n", Z80_GetPC(),
-			  cmd, val);
-			cycle = 0;
+			ErrorOut(
+			  "[%04X] * INVALID DATAFLASH CMD SEQ: %02X %02X\n",
+			  Z80_GetPC(), cmd, val);
 			break;
 		}
+		cycle = 0;
 	}
 }
 
-
-//----------------------------------------------------------------------------
-//
-//  Reads Mailstation RAM
-//
-byte readRAM(unsigned int translated_addr)
+/* Read a byte from the RAM buffer
+ *
+ * TODO: Add a debug hook here
+ */
+inline byte readRAM(unsigned int translated_addr)
 {
-	return ms.mem[translated_addr];
+	return ms.ram[translated_addr];
+}
+
+/* Write a byte to the RAM buffer
+ *
+ * TODO: Add a debug hook here
+ */
+inline void writeRAM(unsigned int translated_addr, byte val)
+{
+	ms.ram[translated_addr] = val;
 }
 
 
-//----------------------------------------------------------------------------
-//
-//  Writes Mailstation RAM
-//
-void writeRAM(unsigned int translated_addr, byte val)
-{
-	ms.mem[translated_addr] = val;
-}
 
-
-
-//----------------------------------------------------------------------------
-//
-//  Z80em Read Memory handler
-//
+/* z80em Read memory callback function.
+ *
+ * Return a byte from the address given to us.
+ * This function needs to figure out what slot the requested address lies in,
+ * figure out what page of which device is in that slot, and return data.
+ *
+ * We also need to translate the address requested to the correct offset of the
+ * slotted page of the requested device.
+ */
+/* XXX: Can the current page/device logic be cleaned up to flow better? */
 unsigned Z80_RDMEM(dword A)
 {
 	ushort addr = (ushort)A;
@@ -507,157 +528,171 @@ unsigned Z80_RDMEM(dword A)
 
 
 	// Slot 0x0000 - always codeflash page 0
-	if (addr < 16384) return ms.codeflash[addr];
+	if (addr < 0x4000) return readCodeFlash(addr);
 
 	// Slot 0xC000 - always RAM page 0
-	if (addr >= 49152) return ms.mem[addr-49152];
+	if (addr >= 0xC000) return readRAM(addr-0xC000);
 
 	// Slot 0x4000
-	if (addr >= 16384 && addr < 32768)
+	if (addr >= 0x4000 && addr < 0x8000)
 	{
-		newaddr = addr - 16384;
+		newaddr = addr - 0x4000;
 		current_page = slot4000_page;
 		current_device = slot4000_device;
 	}
 
 	// Slot 0x8000
-	if (addr >= 32768 && addr < 49152)
+	if (addr >= 0x8000 && addr < 0xC000)
 	{
-		newaddr = addr - 32768;
+		newaddr = addr - 0x8000;
 		current_page = slot8000_page;
 		current_device = slot8000_device;
 	}
 
-	unsigned int translated_addr = newaddr + (current_page * 16384);
+	unsigned int translated_addr = newaddr + (current_page * 0x4000);
 
-	switch(current_device & 0x0F)
-	{
-			case 0:
-				if (current_page >= 64) ErrorOut("[%04X] * INVALID CODEFLASH PAGE: %d\n", Z80_GetPC(),current_page);
-				// Limit to 1MB
-				return ms.codeflash[translated_addr & 0xFFFFF];
+	/* NOTE: It appears that some times the mailstation will emit a
+	 * current device > 0xF. It appears the upper 4 bits are dontcares
+	 * to the slot handling logic.
+	 */
+	switch (current_device & 0x0F)	{
+	  case 0: /* Codeflash */
+		if (current_page >= 64) {
+			ErrorOut("[%04X] * INVALID CODEFLASH PAGE: %d\n",
+			  Z80_GetPC(),current_page);
+		}
+		return readCodeFlash(translated_addr);
 
-			case 1:
-				if (current_page >= 8) ErrorOut("[%04X] * INVALID RAM PAGE: %d\n", Z80_GetPC(),current_page);
-				return readRAM(translated_addr);
+	  case 1: /* Dataflash */
+		if (current_page >= 8) {
+			ErrorOut("[%04X] * INVALID RAM PAGE: %d\n",
+			  Z80_GetPC(), current_page);
+		}
+		return readRAM(translated_addr);
 
-			case 2:
-				return readLCD(newaddr,LCD_LEFT);
-				break;
+	  case 2: /* LCD, left side */
+		return readLCD(newaddr, LCD_LEFT);
+		case 3: /* Dataflash */
+		if (current_page >= 32) {
+			ErrorOut("[%04X] * INVALID DATAFLASH PAGE: %d\n",
+			  Z80_GetPC(), current_page);
+		}
+		return readDataflash(translated_addr);
 
-			case 3:
-				if (current_page >= 32) ErrorOut("[%04X] * INVALID DATAFLASH PAGE: %d\n",Z80_GetPC(),current_page);
-				return readDataflash(translated_addr);
+	  case 4: /* LCD, right side */
+		return readLCD(newaddr, LCD_RIGHT);
 
-			case 4:
-				return readLCD(newaddr,LCD_RIGHT);
-				break;
+	  case 5: /* MODEM */
+		DebugOut("[%04X] * READ FROM MODEM UNSUPPORTED: %04X\n",
+		  Z80_GetPC(), newaddr);
+		break;
 
-			case 5:
-				DebugOut("[%04X] * READ FROM MODEM UNSUPPORTED: %04X\n",Z80_GetPC(), newaddr);
-				/*switch (newaddr)
-				{
-					case 0x0002:
-						return 0xC2;
-				}*/
-				break;
-
-			default:
-				ErrorOut("[%04X] * READ FROM UNKNOWN DEVICE: %d\n", Z80_GetPC(), current_device);
-
+	  default:
+		ErrorOut("[%04X] * READ FROM UNKNOWN DEVICE: %d\n",
+		  Z80_GetPC(), current_device);
+		break;
 	}
 
 	return 0;
-
 }
 
 
-//----------------------------------------------------------------------------
-//
-//  Z80em Write Memory handler
-//
+/* z80em Write memory callback function.
+ *
+ * Write a byte to the address given to us.
+ * This function needs to figure out what slot the requested address lies in,
+ * figure out what page of which device is in that slot, and return data.
+ *
+ * We also need to translate the address requested to the correct offset of the
+ * slotted page of the requested device.
+ */
+/* XXX: Can the current page/device logic be cleaned up to flow better? */
 void Z80_WRMEM(dword A,byte val)
 {
 	ushort addr = (ushort)A;
 	ushort newaddr;
 	byte current_page;
 	byte current_device;
+	uint32_t translated_addr;
 
 
-	/* XXX: Structure this a little cleaner */
 	// Slot 0x0000 - always codeflash page 0
-	if (addr < 16384)
+	if (addr < 0x4000)
 	{
-		ErrorOut("[%04X] * CAN'T WRITE TO CODEFLASH SLOT 0: 0x%X\n", Z80_GetPC(), addr);
+		ErrorOut("[%04X] * CAN'T WRITE TO CODEFLASH SLOT 0: 0x%X\n",
+		  Z80_GetPC(), addr);
 		return;
 	}
 
 	// Slot 0xC000 - always RAM page 0
-	if (addr >= 49152)
+	if (addr >= 0xC000)
 	{
-		ms.mem[addr-49152] = val;
+		writeRAM((addr-0xC000), val);
 		return;
 	}
 
 	// Slot 0x4000
-	if (addr >= 16384 && addr < 32768)
+	if (addr >= 0x4000 && addr < 0x8000)
 	{
-		newaddr = addr - 16384;
+		newaddr = addr - 0x4000;
 		current_page = slot4000_page;
 		current_device = slot4000_device;
 	}
 
 	// Slot 0x8000
-	if (addr >= 32768 && addr < 49152)
+	if (addr >= 0x8000 && addr < 0xC000)
 	{
-		newaddr = addr - 32768;
+		newaddr = addr - 0x8000;
 		current_page = slot8000_page;
 		current_device = slot8000_device;
 	}
 
-	unsigned int translated_addr = newaddr + (current_page * 16384);
+	translated_addr = newaddr + (current_page * 0x4000);
 
 
-	switch(current_device)
-	{
-			case 0:
-				ErrorOut("[%04X] * WRITE TO CODEFLASH UNSUPPORTED\n", Z80_GetPC());
-				break;
+	/* NOTE: While the read path seems to have the situation where the
+	 * upper 4 bits of "current device" are set, I've never seen that be
+	 * a problem here. Regardless, still mask those off.
+	 */
+	switch(current_device & 0x0F) {
+	  case 0: /* Codeflash */
+		ErrorOut("[%04X] * WRITE TO CODEFLASH UNSUPPORTED\n",
+		  Z80_GetPC());
+		break;
 
-			case 1:
-				if (current_page >= 8) ErrorOut("[%04X] * INVALID RAM PAGE: %d\n", Z80_GetPC(), current_page);
-				// Limit to 128KB
-				writeRAM(translated_addr,val);
-				break;
+	  case 1: /* RAM */
+		if (current_page >= 8) {
+			ErrorOut("[%04X] * INVALID RAM PAGE: %d\n",
+			  Z80_GetPC(), current_page);
+		}
+		writeRAM(translated_addr, val);
+		break;
 
-			case 2:
-				writeLCD(newaddr,val,LCD_LEFT);
-				break;
+	  case 2: /* LCD, left side */
+		writeLCD(newaddr, val, LCD_LEFT);
+		break;
 
-			case 3:
-				if (current_page >= 32) ErrorOut("[%04X] * INVALID DATAFLASH PAGE: %d\n", Z80_GetPC(), current_page);
-				writeDataflash(translated_addr,val);
-				break;
+	  case 3: /* Dataflash */
+		if (current_page >= 32) {
+			ErrorOut("[%04X] * INVALID DATAFLASH PAGE: %d\n",
+			  Z80_GetPC(), current_page);
+		}
+		writeDataflash(translated_addr, val);
+		break;
 
-			case 4:
-				writeLCD(newaddr,val,LCD_RIGHT);
-				break;
+	  case 4: /* LCD, right side */
+		writeLCD(newaddr, val, LCD_RIGHT);
+		break;
 
-			case 5:
-				DebugOut("[%04X] WRITE TO MODEM UNSUPPORTED: %04X %02X\n",Z80_GetPC(), newaddr, val);
-				/*switch(newaddr)
-				{
-					case 0x0001:
-						// Trigger modem interrupt
-						if (val & 2 && ms.io[3] & 64) { printf("Triggering transmit empty interrupt\n"); interrupts_active |= 64; }
-						break;
-				}*/
+	  case 5: /* MODEM */
+		DebugOut("[%04X] WRITE TO MODEM UNSUPPORTED: %04X %02X\n",
+		  Z80_GetPC(), newaddr, val);
+		break;
 
-				break;
-
-			default:
-				ErrorOut("[%04X] * WRITE TO UNKNOWN DEVICE: %d\n", Z80_GetPC(), current_device);
-
+	  default:
+		ErrorOut("[%04X] * WRITE TO UNKNOWN DEVICE: %d\n",
+		  Z80_GetPC(), current_device);
+		break;
 	}
 }
 
@@ -946,7 +981,7 @@ void resetMailstation()
 	memset(ms.io,0,64 * 1024);
 	// XXX: Mailstation normally retains RAM I believe.  But Mailstation OS
 	// won't warm-boot properly if we don't erase!  Not sure why yet.
-	memset(ms.mem,0,128 * 1024);
+	memset(ms.ram,0,128 * 1024);
 	poweroff = 0;
 	interrupts_active = 0;
 	Z80_Reset();
@@ -1179,7 +1214,7 @@ int main(int argc, char *argv[])
 	 */
 	ms.codeflash = (uint8_t *)calloc(MEBIBYTE, sizeof(uint8_t));
 	ms.dataflash = (uint8_t *)calloc(MEBIBYTE/2, sizeof(uint8_t));
-	ms.mem = (uint8_t *)calloc(MEBIBYTE/8, sizeof(uint8_t));
+	ms.ram = (uint8_t *)calloc(MEBIBYTE/8, sizeof(uint8_t));
 	ms.io = (uint8_t *)calloc(MEBIBYTE/16, sizeof(uint8_t));
 	ms.lcd_dat1bit = (uint8_t *)calloc(((SCREENWIDTH * SCREENHEIGHT) / 8),
 	  sizeof(uint8_t));
