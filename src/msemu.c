@@ -123,7 +123,7 @@ int runsilent = 1;
 byte power_button = 0;
 
 // This table translates PC scancodes to the Mailstation key matrix
-int keyTranslateTable[10][8] = {
+int32_t keyTranslateTable[10][8] = {
 	{ SDLK_HOME, SDLK_END, 0, SDLK_F1, SDLK_F2, SDLK_F3, SDLK_F4, SDLK_F5 },
 	{ 0, 0, 0, SDLK_AT, 0, 0, 0, SDLK_PAGEUP },
 	{ SDLK_BACKQUOTE, SDLK_1, SDLK_2, SDLK_3, SDLK_4, SDLK_5, SDLK_6, SDLK_7 },
@@ -887,28 +887,33 @@ void Z80_Out (byte Port,byte val)
 
 
 
-//----------------------------------------------------------------------------
-//
-//  Translates PC keys to Mailstation keyboard matrix
-//
+/* Translate real input keys to MS keyboard matrix
+ *
+ * The lookup matrix is currently [10][8], we just walk the whole thing like
+ * one long buffer and do the math later to figure out exactly what bit was
+ * pressed.
+ *
+ * TODO: Would it make sense to rework keyTranslateTable to a single buffer
+ * anyway? Right now the declaration looks crowded and would need some rework
+ * already.
+ */
 void generateKeyboardMatrix(int scancode, int eventtype)
 {
-	int rows,cols;
-	for (rows = 0; rows < 10; rows++)
-	{
-		for (cols = 0; cols < 8; cols++)
-		{
-			if (scancode == keyTranslateTable[rows][cols])
-			{
-				//ms.key_matrix[5] &= 0x7F;
-				if (eventtype == SDL_KEYDOWN)
-				{
-					ms.key_matrix[rows] &= ~((byte)1 << cols);
-				}
-				else
-				{
-					ms.key_matrix[rows] |= ((byte)1 << cols);
-				}
+	uint32_t i = 0;
+	int32_t *keytbl_ptr = &keyTranslateTable[0][0];
+
+	for (i = 0; i < (sizeof(keyTranslateTable)/sizeof(int32_t)); i++) {
+		if (scancode == *(keytbl_ptr + i)) {
+			/* Couldn't avoid the magic numbers below. As noted,
+			 * kTT array is [10][8], directly mapping the MS matrix
+			 * of 10 bytes to represent the whole keyboard. Divide
+			 * by 8 to get the byte the scancode falls in, and mod
+			 * 8 to get the bit in that byte that matches the code.
+			 */
+			if (eventtype == SDL_KEYDOWN) {
+				ms.key_matrix[i/8] &= ~((byte)1 << (i%8));
+			} else {
+				ms.key_matrix[i/8] |= ((byte)1 << (i%8));
 			}
 		}
 	}
