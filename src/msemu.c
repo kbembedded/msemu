@@ -705,9 +705,11 @@ byte Z80_In (byte Port)
 //
 //  Z80em I/O port output handler
 //
+/* XXX: Clean up this LED code at some point, have "real" LED on SDL window */
 void Z80_Out (byte Port,byte val)
 {
 	ushort addr = (ushort)Port;
+	static uint8_t tmp_reg;
 
 	DebugOut("[%04X] * IO -> %04X - %02X\n",Z80_GetPC(), addr, val);
 
@@ -715,8 +717,17 @@ void Z80_Out (byte Port,byte val)
 
 	switch (addr)
 	{
-		case 0x01:
 		case 0x02:
+			if ((tmp_reg & (1 << 4)) != (val & (1 << 4))) {
+				if (val & (1 << 4)) {
+					tmp_reg |= (1 << 4);
+					printf("LED on\n");
+				} else {
+					tmp_reg &= ~(1 << 4);
+					printf("LED off\n");
+				}
+			}
+		case 0x01:
 
 		// Note: Lots of activity on these next ones during normal loop
 		case 0x2C:
