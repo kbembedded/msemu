@@ -1,34 +1,10 @@
-/*
-	Mailstation Emulator v0.1a
-	(01/05/2010)
-
-	Required libraries to compile:
-	  - SDL
-	    (http://www.libsdl.org/)
-	  - SDL_gfx
-	    (http://www.ferzkopp.net/joomla/content/view/19/14/)
-	  - z80em
-	    (http://www.komkon.org/~dekogel/misc.html)
-
-
-	This software is free to use/modify/distribute for
-	non-commercial purposes only.
-
-	If you modify and redistribute this software, you
-	must credit the original author.
-
-	Feel free to contact me at fyberoptic@gmail.com for
-	any questions/comments!
-
-	http://www.fybertech.net/mailstation
-
-
-	Copyright (c) 2010 Jeff Bowman
-*/
-
-
-
-typedef unsigned int DWORD;
+/* Mailstation Emulator
+ *
+ * Copyright (c) 2010 Jeff Bowman
+ * Copyright (c) 2019 KBEmbedded
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
 
 #include <getopt.h>
 #include <stdio.h>
@@ -44,7 +20,6 @@ typedef unsigned int DWORD;
 #include <SDL/SDL.h>
 #include <SDL/SDL_rotozoom.h>
 
-typedef unsigned short ushort;
 
 // This is the embedded font we need to print graphical text.
 char *rawcga_start = &raw_cga_array[0];
@@ -59,10 +34,10 @@ const int LCD_RIGHT = 2;
 struct mshw ms;
 
 // Stores current Mailstation LCD column
-byte lcd_cas = 0;
+uint8_t lcd_cas = 0;
 
 // Last SDL tick at which LCD was updated.  Used for timing LCD refreshes to screen.
-DWORD lcd_lastupdate = 0;
+uint32_t lcd_lastupdate = 0;
 
 // Primary SDL screen surface
 SDL_Surface *screen;
@@ -71,8 +46,8 @@ SDL_Surface *screen;
 SDL_Color colors[6];
 
 // Default entry of color palette to draw Mailstation LCD with
-byte LCD_fg_color = 3;  // LCD black
-byte LCD_bg_color = 2;  // LCD green
+uint8_t LCD_fg_color = 3;  // LCD black
+uint8_t LCD_bg_color = 2;  // LCD green
 
 // Surface for the Mailstation LCD, will be 320x240
 SDL_Surface *lcd_surface;
@@ -87,7 +62,7 @@ int cursorY = 0;
 
 
 // Bits specify which interrupts have been triggered (returned on P3)
-byte interrupts_active = 0;
+uint8_t interrupts_active = 0;
 
 // This is set if the dataflash contents are changed, so that we can write the contents to file.
 int8_t dataflash_updated = 0;
@@ -96,10 +71,10 @@ int8_t dataflash_updated = 0;
 int poweroff = 0;
 
 // Stores the page/device numbers of the two middle 16KB slots of address space
-byte slot4000_page = 0;
-byte slot4000_device = 0;
-byte slot8000_page = 0;
-byte slot8000_device = 0;
+uint8_t slot4000_page = 0;
+uint8_t slot4000_device = 0;
+uint8_t slot8000_page = 0;
+uint8_t slot8000_device = 0;
 
 // This handle is used for outputting all debug info to a file with /debug
 FILE *debugoutfile = NULL;
@@ -109,7 +84,7 @@ int runsilent = 1;
 
 
 // Holds power button status (returned in P9.4)
-byte power_button = 0;
+uint8_t power_button = 0;
 
 // This table translates PC scancodes to the Mailstation key matrix
 int32_t keyTranslateTable[10][8] = {
@@ -136,7 +111,7 @@ void powerOff();
 
 //----------------------------------------------------------------------------
 //
-//  Convert byte to BCD format
+//  Convert uint8_t to BCD format
 //
 unsigned char hex2bcd (unsigned char x)
 {
@@ -235,9 +210,9 @@ void drawLCD()
 //
 //  Emulates writing to Mailstation LCD device
 //
-void writeLCD(ushort newaddr, byte val, int lcdnum)
+void writeLCD(uint16_t newaddr, uint8_t val, int lcdnum)
 {
-	byte *lcd_ptr;
+	uint8_t *lcd_ptr;
 	if (lcdnum == LCD_LEFT) lcd_ptr = ms.lcd_dat1bit;
 	/* XXX: Fix the use of this magic number, replace with a const */
 	else lcd_ptr = &ms.lcd_dat1bit[4800];
@@ -285,9 +260,9 @@ void writeLCD(ushort newaddr, byte val, int lcdnum)
 //
 //  Emulates reading from Mailstation LCD
 //
-byte readLCD(ushort newaddr, int lcdnum)
+uint8_t readLCD(uint16_t newaddr, int lcdnum)
 {
-	byte *lcd_ptr;
+	uint8_t *lcd_ptr;
 	if (lcdnum == LCD_LEFT) lcd_ptr = ms.lcd_dat1bit;
 	/* XXX: Fix the use of this magic number, replace with a const */
 	else lcd_ptr = &ms.lcd_dat1bit[4800];
@@ -377,20 +352,20 @@ void printstring(char *mystring)
 }
 
 
-/* Read a byte from the RAM buffer
+/* Read a uint8_t from the RAM buffer
  *
  * TODO: Add a debug hook here
  */
-inline byte readRAM(unsigned int translated_addr)
+inline uint8_t readRAM(unsigned int translated_addr)
 {
 	return ms.ram[translated_addr];
 }
 
-/* Write a byte to the RAM buffer
+/* Write a uint8_t to the RAM buffer
  *
  * TODO: Add a debug hook here
  */
-inline void writeRAM(unsigned int translated_addr, byte val)
+inline void writeRAM(unsigned int translated_addr, uint8_t val)
 {
 	ms.ram[translated_addr] = val;
 }
@@ -399,7 +374,7 @@ inline void writeRAM(unsigned int translated_addr, byte val)
 
 /* z80em Read memory callback function.
  *
- * Return a byte from the address given to us.
+ * Return a uint8_t from the address given to us.
  * This function needs to figure out what slot the requested address lies in,
  * figure out what page of which device is in that slot, and return data.
  *
@@ -409,10 +384,10 @@ inline void writeRAM(unsigned int translated_addr, byte val)
 /* XXX: Can the current page/device logic be cleaned up to flow better? */
 unsigned Z80_RDMEM(dword A)
 {
-	ushort addr = (ushort)A;
-	ushort newaddr = 0;
-	byte current_page = 0;
-	byte current_device = 0;
+	uint16_t addr = (uint16_t)A;
+	uint16_t newaddr = 0;
+	uint8_t current_page = 0;
+	uint8_t current_device = 0;
 
 
 	// Slot 0x0000 - always codeflash page 0
@@ -487,7 +462,7 @@ unsigned Z80_RDMEM(dword A)
 
 /* z80em Write memory callback function.
  *
- * Write a byte to the address given to us.
+ * Write a uint8_t to the address given to us.
  * This function needs to figure out what slot the requested address lies in,
  * figure out what page of which device is in that slot, and return data.
  *
@@ -495,12 +470,12 @@ unsigned Z80_RDMEM(dword A)
  * slotted page of the requested device.
  */
 /* XXX: Can the current page/device logic be cleaned up to flow better? */
-void Z80_WRMEM(dword A,byte val)
+void Z80_WRMEM(dword A,uint8_t val)
 {
-	ushort addr = (ushort)A;
-	ushort newaddr = 0;
-	byte current_page = 0;
-	byte current_device = 0;
+	uint16_t addr = (uint16_t)A;
+	uint16_t newaddr = 0;
+	uint8_t current_page = 0;
+	uint8_t current_device = 0;
 	uint32_t translated_addr;
 
 
@@ -590,9 +565,9 @@ void Z80_WRMEM(dword A,byte val)
 //
 //  Z80em I/O port input handler
 //
-byte Z80_In (byte Port)
+uint8_t Z80_In (uint8_t Port)
 {
-	ushort addr = (ushort)Port;
+	uint16_t addr = (uint16_t)Port;
 
 	// This is for the RTC on P10-1C
 	time_t theTime;
@@ -613,7 +588,7 @@ byte Z80_In (byte Port)
 				unsigned short kbaddr = ms.io[1] + ((ms.io[2] & 3) << 8);
 
 				// all returned bits should be high unless a key is pressed
-				byte kbresult = 0xFF;
+				uint8_t kbresult = 0xFF;
 
 				// check for a key pressed in active row(s)
 				int n;
@@ -660,7 +635,7 @@ byte Z80_In (byte Port)
 
 		// acknowledge power good + power button status
 		case 0x09:
-			return (byte)0xE0 | ((power_button & 1) << 4);
+			return (uint8_t)0xE0 | ((power_button & 1) << 4);
 
 
 		// These are all for the RTC
@@ -706,9 +681,9 @@ byte Z80_In (byte Port)
 //  Z80em I/O port output handler
 //
 /* XXX: Clean up this LED code at some point, have "real" LED on SDL window */
-void Z80_Out (byte Port,byte val)
+void Z80_Out (uint8_t Port,uint8_t val)
 {
-	ushort addr = (ushort)Port;
+	uint16_t addr = (uint16_t)Port;
 	static uint8_t tmp_reg;
 
 	DebugOut("[%04X] * IO -> %04X - %02X\n",Z80_GetPC(), addr, val);
@@ -806,13 +781,13 @@ void generateKeyboardMatrix(int scancode, int eventtype)
 			/* Couldn't avoid the magic numbers below. As noted,
 			 * kTT array is [10][8], directly mapping the MS matrix
 			 * of 10 bytes to represent the whole keyboard. Divide
-			 * by 8 to get the byte the scancode falls in, and mod
-			 * 8 to get the bit in that byte that matches the code.
+			 * by 8 to get the uint8_t the scancode falls in, and mod
+			 * 8 to get the bit in that uint8_t that matches the code.
 			 */
 			if (eventtype == SDL_KEYDOWN) {
-				ms.key_matrix[i/8] &= ~((byte)1 << (i%8));
+				ms.key_matrix[i/8] &= ~((uint8_t)1 << (i%8));
 			} else {
-				ms.key_matrix[i/8] |= ((byte)1 << (i%8));
+				ms.key_matrix[i/8] |= ((uint8_t)1 << (i%8));
 			}
 		}
 	}
@@ -961,7 +936,7 @@ void msemustartSDL(void)
 	 * will improve this.
 	 */
 	// Load embedded font for graphical print commands
-	cgafont_tmp = SDL_CreateRGBSurfaceFrom((byte*)rawcga_start,
+	cgafont_tmp = SDL_CreateRGBSurfaceFrom((uint8_t*)rawcga_start,
 	  8, 2048, 1, 1,  0,0,0,0);
 	if (cgafont_tmp == NULL) {
 		printf("Error creating font surface\n");
