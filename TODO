@@ -1,6 +1,9 @@
 Create Error printing functions that always exist
 Implement debug sections, e.g. codeflash, IO, dataflash, etc.
 Implement Z80 tracing
-Scale up to be roughly the same size physically as the screen is
-Remove extra window decorations? i.e. the top and bottom bars
-Color screen to look more like actual screen, there are examples of this in the yahoo group
+Implement auto-scaling?
+Add F key indicators below sections of the screen. Can probably use existing text print functions
+Find ways to reduce Z80 emulation CPU consumption
+Input processing seems to skip/lag some times
+Is there a way to add pixel separation to SDL?
+Clean up datatypes to all follow stdint
