@@ -1032,7 +1032,10 @@ int main(int argc, char *argv[])
 			break;
 		  case 'h':
 		  default:
-			printf("Usage\n");
+			printf("Usage: %s [-c <path>] [-d <path>]\n", argv[0]);
+			printf(" -c <path>   | path to codeflash (default: %s)\n", codeflash_path);
+			printf(" -d <path>   | path to dataflash (default: %s)\n", dataflash_path);
+			printf(" -h          | show this usage menu\n");
 			return 1;
 		}
 	}
