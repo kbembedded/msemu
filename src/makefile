@@ -28,3 +28,6 @@ msemu.o: msemu.c
 
 flashops.o: flashops.c
 	$(CC) $(CFLAGS) -c flashops.c -o flashops.o
+
+clean:
+	rm -f flashops.o msemu.o msemu
