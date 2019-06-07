@@ -1,5 +1,6 @@
 #include "msemu.h"
 #include "flashops.h"
+#include "logger.h"
 
 extern struct mshw ms;
 
@@ -59,13 +60,13 @@ int8_t writeDataflash(unsigned int translated_addr, byte val)
 	if (!cycle) {
 		switch (val) {
 		  case 0xFF: /* Reset dataflash, single cycle */
-			DebugOut("[%04X] * Dataflash Reset\n", Z80_GetPC());
+			log_debug("[%04X] * Dataflash Reset\n", Z80_GetPC());
 			break;
 		  case 0x00: /* Not sure what cmd is, but only one cycle? */
-			DebugOut("[%04X] * Dataflash cmd 0x00\n", Z80_GetPC());
+			log_debug("[%04X] * Dataflash cmd 0x00\n", Z80_GetPC());
 			break;
 		  case 0xC3: /* Not sure what cmd is, but only one cycle? */
-			DebugOut("[%04X] * Dataflash cmd 0xC3\n", Z80_GetPC());
+			log_debug("[%04X] * Dataflash cmd 0xC3\n", Z80_GetPC());
 			break;
 		  default:
 			cmd = val;
@@ -77,28 +78,28 @@ int8_t writeDataflash(unsigned int translated_addr, byte val)
 		  case 0x20: /* Sector erase, execute cmd is 0xD0 */
 			if (val != 0xD0) break;
 			translated_addr &= 0xFFFFFF00;
-			DebugOut("[%04X] * Dataflash Sector-Erase: 0x%X\n",
+			log_debug("[%04X] * Dataflash Sector-Erase: 0x%X\n",
 			  Z80_GetPC(), translated_addr);
 			memset(&ms.dataflash[translated_addr], 0xFF, 0x100);
 			modified = 1;
 			break;
 		  case 0x10: /* Byte program */
-			DebugOut("[%04X] * Dataflash Byte-Prog: 0x%X = %02X\n",
+			log_debug("[%04X] * Dataflash Byte-Prog: 0x%X = %02X\n",
 			  Z80_GetPC(),translated_addr,val);
 			ms.dataflash[translated_addr] = val;
 			modified = 1;
 			break;
 		  case 0x30: /* Chip erase, execute cmd is 0x30 */
 			if (val != 0x30) break;
-			DebugOut("[%04X] * Dataflash Chip erase\n");
+			log_debug("[%04X] * Dataflash Chip erase\n");
 			memset(ms.dataflash, 0xFF, MEBIBYTE/2);
 			modified = 1;
 			break;
 		  case 0x90: /* Read ID */
-			DebugOut("[%04X] * Dataflash Read ID\n", Z80_GetPC());
+			log_debug("[%04X] * Dataflash Read ID\n", Z80_GetPC());
 			break;
 		  default:
-			ErrorOut(
+			log_error(
 			  "[%04X] * INVALID DATAFLASH CMD SEQ: %02X %02X\n",
 			  Z80_GetPC(), cmd, val);
 			break;
