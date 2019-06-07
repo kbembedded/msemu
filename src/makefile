@@ -17,7 +17,13 @@ endif
 # LSB_FIRST		Compile for a low-endian machine
 # X86_ASM			Use inline 80x86 assembly (GCC only)
 
-CFLAGS = -Os -Wall -DLSB_FIRST -DX86_ASM -DDEBUG
+CFLAGS = -Wall -DLSB_FIRST -DX86_ASM
+
+ifdef DEBUG
+	CFLAGS += -O0 -g -DDEBUG
+else
+	CFLAGS += -Os
+endif
 
 
 msemu.exe: msemu.o flashops.o logger.o
@@ -31,3 +37,6 @@ flashops.o: flashops.c
 
 logger.o: logger.c
 	$(CC) $(CFLAGS) -c logger.c -o logger.o
+
+clean:
+	rm -f flashops.o msemu.o msemu
