@@ -20,11 +20,14 @@ endif
 CFLAGS = -Os -Wall -DLSB_FIRST -DX86_ASM -DDEBUG
 
 
-msemu.exe: msemu.o flashops.o
-	$(CC) $(CFLAGS) z80em/Z80.o z80em/Z80Debug.o flashops.o  msemu.o  -o $(OUTFILE) $(USINGMINGW) $(LIBS) 
+msemu.exe: msemu.o flashops.o logger.o
+	$(CC) $(CFLAGS) z80em/Z80.o z80em/Z80Debug.o logger.o flashops.o  msemu.o  -o $(OUTFILE) $(USINGMINGW) $(LIBS) 
 	
 msemu.o: msemu.c
 	$(CC) $(CFLAGS) -c msemu.c -o msemu.o
 
 flashops.o: flashops.c
 	$(CC) $(CFLAGS) -c flashops.c -o flashops.o
+
+logger.o: logger.c
+	$(CC) $(CFLAGS) -c logger.c -o logger.o
