@@ -7,7 +7,13 @@
 CC	= gcc	# C compiler used
 LD	= gcc	# Linker used
 
-CFLAGS	= -Wall -O2 -fomit-frame-pointer -DLSB_FIRST -DDEBUG
+CFLAGS	= -Wall -fomit-frame-pointer -DLSB_FIRST
+
+ifdef DEBUG
+	CFLAGS += -O0 -g -DDEBUG
+else
+	CFLAGS += -O2
+endif
 
 all:    Z80.o Z80Debug.o z80dasm
 
