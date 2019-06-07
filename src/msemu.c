@@ -926,7 +926,7 @@ int main(int argc, char *argv[])
 	char *dataflash_path = "dataflash.bin";
     char* logpath = NULL;
 	int c;
-	int silent = 0;
+	int silent = 1;
 	int execute_counter = 0;
 	int exitemu = 0;
 	uint32_t lasttick = SDL_GetTicks();
@@ -938,7 +938,7 @@ int main(int argc, char *argv[])
 	  { "codeflash", required_argument, NULL, 'c' },
 	  { "dataflash", required_argument, NULL, 'd' },
 	  { "logfile", optional_argument, NULL, 'l' },
-	  { "silent", no_argument, NULL, 's' },
+	  { "verbose", no_argument, NULL, 'v' },
 	  { NULL, no_argument, NULL, 0}
 	};
 
@@ -950,23 +950,8 @@ int main(int argc, char *argv[])
 	 */
 
 	/* Process arguments */
-	/* TODO:
-	 *   Rework runsilent flag and setup
-	 */
-	/* TODO:
-	 *   Implement the old debug flags below
-	 *   Implement some internal debugging? Z80 state machine, etc.
-	 *
-	 *      //for (n = 1; n < argc; n++) {
-         *      // Print all DebugOut lines to console
-	 *      //      if (strcmp(argv[n],"/console") == 0) runsilent = 0;
-	 *
-	 *      // Print all DebugOut lines to file
-	 *      //      if (strcmp(argv[n],"/debug") == 0) debugoutfile = fopen("debug.out","w");
-	 *      //}
-	 */
 	while ((c = getopt_long(argc, argv,
-	  "hc:d:l:s", long_opts, NULL)) != -1) {
+	  "hc:d:l:v", long_opts, NULL)) != -1) {
 		switch(c) {
 		  case 'c':
 			codeflash_path = malloc(strlen(optarg)+1);
@@ -983,8 +968,8 @@ int main(int argc, char *argv[])
 			/* TODO: Implement error handling here */
 			strncpy(logpath, optarg, strlen(optarg) + 1);
 		  	break;
-		  case 's':
-		    silent = 1;
+		  case 'v':
+		    silent = 0;
 		    break;
 		  case 'h':
 		  default:
@@ -992,7 +977,7 @@ int main(int argc, char *argv[])
 			printf(" -c <path>   | path to codeflash (default: %s)\n", codeflash_path);
 			printf(" -d <path>   | path to dataflash (default: %s)\n", dataflash_path);
 			printf(" -l <path>   | path to log file\n");
-			printf(" -s          | runs silently\n");
+			printf(" -v          | verbose logging\n");
 			printf(" -h          | show this usage menu\n");
 			return 1;
 		}
