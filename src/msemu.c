@@ -13,13 +13,13 @@
 #include <time.h>
 #include <unistd.h>
 #include "rawcga.h"
+#include "logger.h"
 #include "msemu.h"
 #include "flashops.h"
 #include "z80em/Z80.h"
 #include "z80em/Z80IO.h"
 #include <SDL/SDL.h>
 #include <SDL/SDL_rotozoom.h>
-
 
 // This is the embedded font we need to print graphical text.
 char *rawcga_start = &raw_cga_array[0];
@@ -76,13 +76,6 @@ uint8_t slot4000_device = 0;
 uint8_t slot8000_page = 0;
 uint8_t slot8000_device = 0;
 
-// This handle is used for outputting all debug info to a file with /debug
-FILE *debugoutfile = NULL;
-
-// If this is true, then certain debug output isn't displayed to console (slows down emulation)
-int runsilent = 1;
-
-
 // Holds power button status (returned in P9.4)
 uint8_t power_button = 0;
 
@@ -120,54 +113,6 @@ unsigned char hex2bcd (unsigned char x)
     y = y | (x % 10);
     return y;
 }
-
-//----------------------------------------------------------------------------
-//
-//  Outputs debug messages
-//
-void DebugOut(char *mystring,...)
-{
-	if (!debugoutfile && runsilent) return;
-
-	va_list argptr;
-	va_start( argptr, mystring );
-
-	char newstring[1024];
-	vsprintf(newstring, mystring, argptr);
-
-	// If debug file open, print there
-	if (debugoutfile) fputs(newstring,debugoutfile);
-
-	// If not silent, print to screen too
-	if (!runsilent)
-	{
-		// Print to SDL surface
-		//printstring(newstring);
-
-		// Print to console
-		printf("%s",newstring);
-	}
-
-	va_end( argptr );
-}
-
-void ErrorOut(char *mystring,...)
-{
-	va_list argptr;
-	va_start( argptr, mystring );
-
-	char newstring[1024];
-	vsprintf(newstring, mystring, argptr);
-
-	// If debug file open, print there
-	if (debugoutfile) fputs(newstring,debugoutfile);
-
-	printf("%s",newstring);
-
-	va_end( argptr );
-}
-
-
 
 //----------------------------------------------------------------------------
 //
@@ -421,14 +366,14 @@ unsigned Z80_RDMEM(dword A)
 	switch (current_device & 0x0F)	{
 	  case 0: /* Codeflash */
 		if (current_page >= 64) {
-			ErrorOut("[%04X] * INVALID CODEFLASH PAGE: %d\n",
+			log_error("[%04X] * INVALID CODEFLASH PAGE: %d\n",
 			  Z80_GetPC(),current_page);
 		}
 		return readCodeFlash(translated_addr);
 
 	  case 1: /* Dataflash */
 		if (current_page >= 8) {
-			ErrorOut("[%04X] * INVALID RAM PAGE: %d\n",
+			log_error("[%04X] * INVALID RAM PAGE: %d\n",
 			  Z80_GetPC(), current_page);
 		}
 		return readRAM(translated_addr);
@@ -437,7 +382,7 @@ unsigned Z80_RDMEM(dword A)
 		return readLCD(newaddr, LCD_LEFT);
 		case 3: /* Dataflash */
 		if (current_page >= 32) {
-			ErrorOut("[%04X] * INVALID DATAFLASH PAGE: %d\n",
+			log_error("[%04X] * INVALID DATAFLASH PAGE: %d\n",
 			  Z80_GetPC(), current_page);
 		}
 		return readDataflash(translated_addr);
@@ -446,12 +391,12 @@ unsigned Z80_RDMEM(dword A)
 		return readLCD(newaddr, LCD_RIGHT);
 
 	  case 5: /* MODEM */
-		DebugOut("[%04X] * READ FROM MODEM UNSUPPORTED: %04X\n",
+		log_debug("[%04X] * READ FROM MODEM UNSUPPORTED: %04X\n",
 		  Z80_GetPC(), newaddr);
 		break;
 
 	  default:
-		ErrorOut("[%04X] * READ FROM UNKNOWN DEVICE: %d\n",
+		log_error("[%04X] * READ FROM UNKNOWN DEVICE: %d\n",
 		  Z80_GetPC(), current_device);
 		break;
 	}
@@ -482,7 +427,7 @@ void Z80_WRMEM(dword A,uint8_t val)
 	// Slot 0x0000 - always codeflash page 0
 	if (addr < 0x4000)
 	{
-		ErrorOut("[%04X] * CAN'T WRITE TO CODEFLASH SLOT 0: 0x%X\n",
+		log_error("[%04X] * CAN'T WRITE TO CODEFLASH SLOT 0: 0x%X\n",
 		  Z80_GetPC(), addr);
 		return;
 	}
@@ -519,13 +464,13 @@ void Z80_WRMEM(dword A,uint8_t val)
 	 */
 	switch(current_device & 0x0F) {
 	  case 0: /* Codeflash */
-		ErrorOut("[%04X] * WRITE TO CODEFLASH UNSUPPORTED\n",
+		log_error("[%04X] * WRITE TO CODEFLASH UNSUPPORTED\n",
 		  Z80_GetPC());
 		break;
 
 	  case 1: /* RAM */
 		if (current_page >= 8) {
-			ErrorOut("[%04X] * INVALID RAM PAGE: %d\n",
+			log_error("[%04X] * INVALID RAM PAGE: %d\n",
 			  Z80_GetPC(), current_page);
 		}
 		writeRAM(translated_addr, val);
@@ -537,7 +482,7 @@ void Z80_WRMEM(dword A,uint8_t val)
 
 	  case 3: /* Dataflash */
 		if (current_page >= 32) {
-			ErrorOut("[%04X] * INVALID DATAFLASH PAGE: %d\n",
+			log_error("[%04X] * INVALID DATAFLASH PAGE: %d\n",
 			  Z80_GetPC(), current_page);
 		}
 		dataflash_updated = writeDataflash(translated_addr, val);
@@ -548,12 +493,12 @@ void Z80_WRMEM(dword A,uint8_t val)
 		break;
 
 	  case 5: /* MODEM */
-		DebugOut("[%04X] WRITE TO MODEM UNSUPPORTED: %04X %02X\n",
+		log_debug("[%04X] WRITE TO MODEM UNSUPPORTED: %04X %02X\n",
 		  Z80_GetPC(), newaddr, val);
 		break;
 
 	  default:
-		ErrorOut("[%04X] * WRITE TO UNKNOWN DEVICE: %d\n",
+		log_error("[%04X] * WRITE TO UNKNOWN DEVICE: %d\n",
 		  Z80_GetPC(), current_device);
 		break;
 	}
@@ -574,7 +519,7 @@ uint8_t Z80_In (uint8_t Port)
 	time( &theTime );
 	struct tm *rtc_time = localtime(&theTime);
 
-	DebugOut("[%04X] * IO <- %04X - %02X\n", Z80_GetPC(), addr,ms.io[addr]);
+	log_debug("[%04X] * IO <- %04X - %02X\n", Z80_GetPC(), addr,ms.io[addr]);
 
 	//if (addr < 5 || addr > 8) printf("* IO <- %04X - %02X\n",addr,ms.io[addr]);
 
@@ -686,7 +631,7 @@ void Z80_Out (uint8_t Port,uint8_t val)
 	uint16_t addr = (uint16_t)Port;
 	static uint8_t tmp_reg;
 
-	DebugOut("[%04X] * IO -> %04X - %02X\n",Z80_GetPC(), addr, val);
+	log_debug("[%04X] * IO -> %04X - %02X\n",Z80_GetPC(), addr, val);
 
 	//if (addr < 5 || addr > 8) printf("* IO -> %04X - %02X\n",addr, val);
 
@@ -979,7 +924,9 @@ int main(int argc, char *argv[])
 {
 	char *codeflash_path = "codeflash.bin";
 	char *dataflash_path = "dataflash.bin";
+    char* logpath = NULL;
 	int c;
+	int silent = 1;
 	int execute_counter = 0;
 	int exitemu = 0;
 	uint32_t lasttick = SDL_GetTicks();
@@ -990,6 +937,8 @@ int main(int argc, char *argv[])
 	  { "help", no_argument, NULL, 'h' },
 	  { "codeflash", required_argument, NULL, 'c' },
 	  { "dataflash", required_argument, NULL, 'd' },
+	  { "logfile", optional_argument, NULL, 'l' },
+	  { "verbose", no_argument, NULL, 'v' },
 	  { NULL, no_argument, NULL, 0}
 	};
 
@@ -1001,24 +950,8 @@ int main(int argc, char *argv[])
 	 */
 
 	/* Process arguments */
-	/* TODO:
-	 *   Rework runsilent flag and setup
-	 */
-	/* TODO:
-	 *   Implement the old debug flags below
-	 *   Implement some internal debugging? Z80 state machine, etc.
-	 *
-	 *      //for (n = 1; n < argc; n++) {
-         *      // Print all DebugOut lines to console
-	 *      //      if (strcmp(argv[n],"/console") == 0) runsilent = 0;
-	 *
-	 *      // Print all DebugOut lines to file
-	 *      //      if (strcmp(argv[n],"/debug") == 0) debugoutfile = fopen("debug.out","w");
-	 *      //}
-	 */
-
 	while ((c = getopt_long(argc, argv,
-	  "hc::d::", long_opts, NULL)) != -1) {
+	  "hc:d:l:v", long_opts, NULL)) != -1) {
 		switch(c) {
 		  case 'c':
 			codeflash_path = malloc(strlen(optarg)+1);
@@ -1030,15 +963,28 @@ int main(int argc, char *argv[])
 			/* TODO: Implement error handling here */
 			strncpy(dataflash_path, optarg, strlen(optarg)+1);
 			break;
+		  case 'l':
+            logpath = malloc(strlen(optarg) + 1);
+			/* TODO: Implement error handling here */
+			strncpy(logpath, optarg, strlen(optarg) + 1);
+		  	break;
+		  case 'v':
+		    silent = 0;
+		    break;
 		  case 'h':
 		  default:
-			printf("Usage: %s [-c <path>] [-d <path>]\n", argv[0]);
+			printf("Usage: %s [-s] [-c <path>] [-d <path>] [-l <path>]\n", argv[0]);
 			printf(" -c <path>   | path to codeflash (default: %s)\n", codeflash_path);
 			printf(" -d <path>   | path to dataflash (default: %s)\n", dataflash_path);
+			printf(" -l <path>   | path to log file\n");
+			printf(" -v          | verbose logging\n");
 			printf(" -h          | show this usage menu\n");
 			return 1;
 		}
 	}
+
+	// Initialize logging
+	log_init(logpath, silent);
 
 	/* Allocate and clear buffers.
 	 * Codeflash is 1 MiB
@@ -1207,7 +1153,7 @@ int main(int argc, char *argv[])
 	}
 
 
-	if (debugoutfile) fclose(debugoutfile);
+	log_shutdown();
 
 	return 0;
 }
