@@ -6,9 +6,6 @@
 
 #define	MEBIBYTE	0x100000
 
-void DebugOut(char *mystring,...);
-void ErrorOut(char *mystring,...);
-
 struct mshw {
 	uint8_t *ram;
 	uint8_t *io;
