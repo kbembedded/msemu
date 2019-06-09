@@ -1,10 +1,18 @@
-#ifndef __MSEMU_H__
+#ifndef __MSEMU_H_
 #define __MSEMU_H_
 
 #include <string.h>
 #include <stdint.h>
 
 #define	MEBIBYTE	0x100000
+
+// Default screen size
+#define MS_LCD_WIDTH 	320
+#define MS_LCD_HEIGHT	240
+
+// Constants to identify each side of the LCD
+#define MS_LCD_LEFT 	1
+#define MS_LCD_RIGHT 	2
 
 struct mshw {
 	uint8_t *ram;
@@ -17,4 +25,4 @@ struct mshw {
 	uint8_t key_matrix[10];
 };
 
-#endif
+#endif // __MSEMU_H_
