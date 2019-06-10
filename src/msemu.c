@@ -689,7 +689,6 @@ void powerOff()
 	// clear LCD
 	memset(ms.lcd_dat8bit, 0, MS_LCD_WIDTH * MS_LCD_HEIGHT);
 	ui_drawSplashScreen();
-	ui_drawLCD();
 }
 
 /* Main
@@ -854,7 +853,7 @@ int main(int argc, char *argv[])
 		/* NOTE: Cursory glance suggests the screen updates 20ms after
 		 * the screen array changed.
 		 */
-		if ((lcd_lastupdate != 0) &&
+		if (!poweroff && (lcd_lastupdate != 0) &&
 		  (currenttick - lcd_lastupdate >= 20)) {
 			ui_drawLCD();
 			lcd_lastupdate = 0;
