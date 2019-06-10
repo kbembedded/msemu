@@ -25,36 +25,44 @@ int cursorY = 0;
 //
 //  Graphically prints a character to the SDL screen
 //
-void printcharXY(char mychar, int x, int y)
+void printcharXY(SDL_Surface* surface, char mychar, int x, int y)
 {
-	SDL_Rect letterarea;
-	SDL_Rect charoutarea;
-
 	// CGA font characters are 8x8
-	letterarea.w = letterarea.h = charoutarea.w = charoutarea.h = 8;
-	letterarea.x = 0;
-	letterarea.y = 8 * mychar;
+	SDL_Rect charoutarea;
 	charoutarea.x = x;
 	charoutarea.y = y;
+    charoutarea.h = 8;
+    charoutarea.w = 8;
+
+	SDL_Rect letterarea;
+	letterarea.x = 0;
+	letterarea.y = 8 * mychar;
+	letterarea.w = 8;
+    letterarea.h = 8;
 
 	//SDL_GetVideoSurface()
-	if (SDL_BlitSurface(cgafont_surface, &letterarea, lcd_surface, &charoutarea) != 0) printf("Error blitting text\n");
+	if (SDL_BlitSurface(cgafont_surface, &letterarea, surface, &charoutarea) != 0) {
+        printf("Error blitting text\n");
+    }
 }
-
 
 //----------------------------------------------------------------------------
 //
 //  Graphically prints a string at the specified X/Y coords
 //
-void printstringXY(char *mystring, int x, int y)
+void printstringXY(SDL_Surface* surface, char *mystring, int x, int y)
 {
 	while (*mystring)
 	{
-		printcharXY(*mystring,x,y);
+		printcharXY(surface, *mystring, x, y);
 		mystring++;
-		// CGA font characters are 8x8
-		x+=8;
-		if (x > lcd_surface->w) { x = 0; y += 8; } //Move to the next line
+		x += 8; // CGA font characters are 8x8
+
+        //Move to the next line if necessary
+		if (x > surface->w) {
+            x = 0;
+            y += 8;
+        }
 	}
 }
 
@@ -62,29 +70,41 @@ void printstringXY(char *mystring, int x, int y)
 //
 //  Graphically prints a string centered at the specified Y coordinate
 //
-void printstring_centered(char *mystring, int y)
+void printstring_centered(SDL_Surface* surface, char *mystring, int y)
 {
-	int surface_cols = lcd_surface->w / 8;
+	int surface_cols = surface->w / 8;
 	int x = (surface_cols - strlen(mystring)) / 2;
-	printstringXY(mystring, x * 8, y);
+	printstringXY(surface, mystring, x * 8, y);
 }
-
 
 //----------------------------------------------------------------------------
 //
 //  Graphically prints a string at the current cursor position
 //
-void printstring(char *mystring)
+void printstring(SDL_Surface* surface, char *mystring)
 {
 	while (*mystring)
 	{
-		if (*mystring == '\n') { cursorX = 0; cursorY++; mystring++; continue; }
-		printcharXY(*mystring,cursorX * 8, cursorY * 8);
+		if (*mystring == '\n') {
+            cursorX = 0;
+            cursorY++;
+            mystring++;
+            continue; 
+        }
+
+		printcharXY(surface, *mystring, cursorX * 8, cursorY * 8);
 		mystring++;
 		cursorX++;
-		if (cursorX * 8 >= lcd_surface->w) { cursorX = 0; cursorY++; }
-		if (cursorY * 8 >= lcd_surface->h) cursorY = 0;
-	}
+
+		if (cursorX * 8 >= surface->w) {
+            cursorX = 0;
+            cursorY++;
+        }
+
+		if (cursorY * 8 >= surface->h) {
+            cursorY = 0;
+	    }
+    }
 }
 
 /* XXX: This needs rework still*/
@@ -172,13 +192,29 @@ void ui_init(char* raw_cga_array, uint8_t* ms_lcd_buffer)
     }
 }
 
+// TODO: This is no longer zoomed 2x like the LCD because the printstring
+// functions are using the correct SDL surface.
+// Need to find a better way to handle screen scaling as a final step before
+// rendering the final surface instead of scaling each surface separately.
 void ui_drawSplashScreen()
 {
-    printstring_centered("Mailstation Emulator", 4 * 8);
-	printstring_centered("v0.1a", 5 * 8);
-	printstring_centered("Created by Jeff Bowman", 8 * 8);
-	printstring_centered("(fyberoptic@gmail.com)", 9 * 8);
-	printstring_centered("F12 to Start", 15 * 8);
+    SDL_Rect bg;
+    bg.x = 0;
+    bg.y = 0;
+    bg.w = screen->w;
+    bg.h = screen->h;
+
+    if (SDL_FillRect(screen, &bg, 0x00000000)) {
+        printf("Error drawing splashscreen background.\n");
+    }
+
+    printstring_centered(screen, "Mailstation Emulator", 4 * 8);
+	printstring_centered(screen, "v0.1a", 5 * 8);
+	printstring_centered(screen, "Created by Jeff Bowman", 8 * 8);
+	printstring_centered(screen, "(fyberoptic@gmail.com)", 9 * 8);
+	printstring_centered(screen, "F12 to Start", 15 * 8);
+
+    SDL_Flip(screen);
 }
 
 void ui_drawLCD()
