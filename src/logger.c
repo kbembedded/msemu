@@ -13,69 +13,69 @@ static int runsilent = 1;
 
 void log_init(const char* logpath, int silent)
 {
-    if (logpath)
-    {
-        debugoutfile = fopen(logpath, "w");
-    }
-    
-    runsilent = silent;
+	if (logpath)
+	{
+		debugoutfile = fopen(logpath, "w");
+	}
+	
+	runsilent = silent;
 }
 
 void log_shutdown()
 {
-    if (debugoutfile)
-    {
-        fclose(debugoutfile);
-    }
+	if (debugoutfile)
+	{
+		fclose(debugoutfile);
+	}
 }
 
 void log_debug(char *mystring, ...)
 {
-    if (!debugoutfile && runsilent)
-    {
-        return;
-    }
+	if (!debugoutfile && runsilent)
+	{
+		return;
+	}
 
-    va_list argptr;
-    va_start(argptr, mystring);
+	va_list argptr;
+	va_start(argptr, mystring);
 
-    char newstring[1024];
-    vsprintf(newstring, mystring, argptr);
+	char newstring[1024];
+	vsprintf(newstring, mystring, argptr);
 
-    // If debug file open, print there
-    if (debugoutfile)
-    {
-        fputs(newstring, debugoutfile);
-    }
+	// If debug file open, print there
+	if (debugoutfile)
+	{
+		fputs(newstring, debugoutfile);
+	}
 
-    // If not silent, print to screen too
-    if (!runsilent)
-    {
-        // Print to SDL surface
-        //printstring(newstring);
+	// If not silent, print to screen too
+	if (!runsilent)
+	{
+		// Print to SDL surface
+		//printstring(newstring);
 
-        // Print to console
-        printf("%s", newstring);
-    }
+		// Print to console
+		printf("%s", newstring);
+	}
 
-    va_end(argptr);
+	va_end(argptr);
 }
 
 void log_error(char *mystring, ...)
 {
-    va_list argptr;
-    va_start(argptr, mystring);
+	va_list argptr;
+	va_start(argptr, mystring);
 
-    char newstring[1024];
-    vsprintf(newstring, mystring, argptr);
+	char newstring[1024];
+	vsprintf(newstring, mystring, argptr);
 
-    // If debug file open, print there
-    if (debugoutfile)
-    {
-        fputs(newstring, debugoutfile);
-    }
+	// If debug file open, print there
+	if (debugoutfile)
+	{
+		fputs(newstring, debugoutfile);
+	}
 
-    printf("%s", newstring);
+	printf("%s", newstring);
 
-    va_end(argptr);
+	va_end(argptr);
 }

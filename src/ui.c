@@ -31,19 +31,19 @@ void printcharXY(SDL_Surface* surface, char mychar, int x, int y)
 	SDL_Rect charoutarea;
 	charoutarea.x = x;
 	charoutarea.y = y;
-    charoutarea.h = 8;
-    charoutarea.w = 8;
+	charoutarea.h = 8;
+	charoutarea.w = 8;
 
 	SDL_Rect letterarea;
 	letterarea.x = 0;
 	letterarea.y = 8 * mychar;
 	letterarea.w = 8;
-    letterarea.h = 8;
+	letterarea.h = 8;
 
 	//SDL_GetVideoSurface()
 	if (SDL_BlitSurface(cgafont_surface, &letterarea, surface, &charoutarea) != 0) {
-        printf("Error blitting text\n");
-    }
+		printf("Error blitting text\n");
+	}
 }
 
 //----------------------------------------------------------------------------
@@ -58,11 +58,11 @@ void printstringXY(SDL_Surface* surface, char *mystring, int x, int y)
 		mystring++;
 		x += 8; // CGA font characters are 8x8
 
-        //Move to the next line if necessary
+		//Move to the next line if necessary
 		if (x > surface->w) {
-            x = 0;
-            y += 8;
-        }
+			x = 0;
+			y += 8;
+		}
 	}
 }
 
@@ -86,31 +86,31 @@ void printstring(SDL_Surface* surface, char *mystring)
 	while (*mystring)
 	{
 		if (*mystring == '\n') {
-            cursorX = 0;
-            cursorY++;
-            mystring++;
-            continue; 
-        }
+			cursorX = 0;
+			cursorY++;
+			mystring++;
+			continue; 
+		}
 
 		printcharXY(surface, *mystring, cursorX * 8, cursorY * 8);
 		mystring++;
 		cursorX++;
 
 		if (cursorX * 8 >= surface->w) {
-            cursorX = 0;
-            cursorY++;
-        }
+			cursorX = 0;
+			cursorY++;
+		}
 
 		if (cursorY * 8 >= surface->h) {
-            cursorY = 0;
-	    }
-    }
+			cursorY = 0;
+		}
+	}
 }
 
 /* XXX: This needs rework still*/
 void ui_init(char* raw_cga_array, uint8_t* ms_lcd_buffer)
 {
-    SDL_Surface *cgafont_tmp = NULL;
+	SDL_Surface *cgafont_tmp = NULL;
 	SDL_Color fontcolors[2];
 
 	SDL_Init( SDL_INIT_VIDEO );
@@ -188,8 +188,8 @@ void ui_init(char* raw_cga_array, uint8_t* ms_lcd_buffer)
 
 	// Set palette for LCD to global palette
 	if (SDL_SetPalette(lcd_surface, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 6) != 1) {
-        printf("Error setting palette on LCD\n");
-    }
+		printf("Error setting palette on LCD\n");
+	}
 }
 
 // TODO: This is no longer zoomed 2x like the LCD because the printstring
@@ -198,23 +198,23 @@ void ui_init(char* raw_cga_array, uint8_t* ms_lcd_buffer)
 // rendering the final surface instead of scaling each surface separately.
 void ui_drawSplashScreen()
 {
-    SDL_Rect bg;
-    bg.x = 0;
-    bg.y = 0;
-    bg.w = screen->w;
-    bg.h = screen->h;
+	SDL_Rect bg;
+	bg.x = 0;
+	bg.y = 0;
+	bg.w = screen->w;
+	bg.h = screen->h;
 
-    if (SDL_FillRect(screen, &bg, 0x00000000)) {
-        printf("Error drawing splashscreen background.\n");
-    }
+	if (SDL_FillRect(screen, &bg, 0x00000000)) {
+		printf("Error drawing splashscreen background.\n");
+	}
 
-    printstring_centered(screen, "Mailstation Emulator", 4 * 8);
+	printstring_centered(screen, "Mailstation Emulator", 4 * 8);
 	printstring_centered(screen, "v0.1a", 5 * 8);
 	printstring_centered(screen, "Created by Jeff Bowman", 8 * 8);
 	printstring_centered(screen, "(fyberoptic@gmail.com)", 9 * 8);
 	printstring_centered(screen, "F12 to Start", 15 * 8);
 
-    SDL_Flip(screen);
+	SDL_Flip(screen);
 }
 
 void ui_drawLCD()
