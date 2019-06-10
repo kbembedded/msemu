@@ -79,10 +79,10 @@ void powerOff();
 //
 unsigned char hex2bcd (unsigned char x)
 {
-    unsigned char y;
-    y = (x / 10) << 4;
-    y = y | (x % 10);
-    return y;
+	unsigned char y;
+	y = (x / 10) << 4;
+	y = y | (x % 10);
+	return y;
 }
 
 //----------------------------------------------------------------------------
@@ -700,7 +700,7 @@ int main(int argc, char *argv[])
 {
 	char *codeflash_path = "codeflash.bin";
 	char *dataflash_path = "dataflash.bin";
-    char* logpath = NULL;
+	char* logpath = NULL;
 	int c;
 	int silent = 1;
 	int execute_counter = 0;
@@ -740,13 +740,13 @@ int main(int argc, char *argv[])
 			strncpy(dataflash_path, optarg, strlen(optarg)+1);
 			break;
 		  case 'l':
-            logpath = malloc(strlen(optarg) + 1);
+			logpath = malloc(strlen(optarg) + 1);
 			/* TODO: Implement error handling here */
 			strncpy(logpath, optarg, strlen(optarg) + 1);
 		  	break;
 		  case 'v':
-		    silent = 0;
-		    break;
+			silent = 0;
+			break;
 		  case 'h':
 		  default:
 			printf("Usage: %s [-s] [-c <path>] [-d <path>] [-l <path>]\n", argv[0]);
@@ -875,7 +875,7 @@ int main(int argc, char *argv[])
 			/* Exit if SDL quits, or Escape key was pushed */
 			if ((event.type == SDL_QUIT) ||
 			  ((event.type == SDL_KEYDOWN) &&
-			    (event.key.keysym.sym == SDLK_ESCAPE))) {
+				(event.key.keysym.sym == SDLK_ESCAPE))) {
 				exitemu = 1;
 			}
 
