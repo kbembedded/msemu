@@ -16,20 +16,11 @@
 #include "logger.h"
 #include "msemu.h"
 #include "flashops.h"
+#include "ui.h"
 #include "z80em/Z80.h"
 #include "z80em/Z80IO.h"
 #include <SDL/SDL.h>
 #include <SDL/SDL_rotozoom.h>
-
-// This is the embedded font we need to print graphical text.
-char *rawcga_start = &raw_cga_array[0];
-
-// Default screen size
-const int SCREENWIDTH = 320;
-const int SCREENHEIGHT = 240;
-
-const int LCD_LEFT = 1;
-const int LCD_RIGHT = 2;
 
 struct mshw ms;
 
@@ -39,27 +30,9 @@ uint8_t lcd_cas = 0;
 // Last SDL tick at which LCD was updated.  Used for timing LCD refreshes to screen.
 uint32_t lcd_lastupdate = 0;
 
-// Primary SDL screen surface
-SDL_Surface *screen;
-
-// Master palette
-SDL_Color colors[6];
-
 // Default entry of color palette to draw Mailstation LCD with
 uint8_t LCD_fg_color = 3;  // LCD black
 uint8_t LCD_bg_color = 2;  // LCD green
-
-// Surface for the Mailstation LCD, will be 320x240
-SDL_Surface *lcd_surface;
-
-// Surface to load CGA font data, for printing text with SDL
-SDL_Surface *cgafont_surface = NULL;
-
-// Cursor position for unfinished code to print text in SDL
-int cursorX = 0;
-int cursorY = 0;
-
-
 
 // Bits specify which interrupts have been triggered (returned on P3)
 uint8_t interrupts_active = 0;
@@ -95,8 +68,6 @@ int32_t keyTranslateTable[10][8] = {
 
 
 // Some function declarations for later
-void generateLCD();
-void printstring(char*);
 void powerOff();
 
 
@@ -116,49 +87,12 @@ unsigned char hex2bcd (unsigned char x)
 
 //----------------------------------------------------------------------------
 //
-//  Draws the LCD to the screen
-//
-void drawLCD()
-{
-	SDL_Surface *lcd_surface2x = NULL;
-
-	// Setup output rect to fill screen for now
-	SDL_Rect outrect;
-	outrect.x = 0;
-	outrect.y = 0;
-	outrect.w = SCREENWIDTH;
-	outrect.h = SCREENWIDTH;
-
-	// Double surface size to 640x480
-	lcd_surface2x = zoomSurface(lcd_surface, (double)2.0, (double)2.0, 0);
-	// If we don't clear the color key, it constantly overlays just the primary color during blit!
-	SDL_SetColorKey(lcd_surface2x, 0, 0);
-
-	// Draw to screen
-	if (SDL_BlitSurface(lcd_surface2x, NULL, screen, &outrect) != 0) {
-		printf("Error blitting LCD to screen: %s\n",SDL_GetError());
-	}
-
-	//SDL_UpdateRect(SDL_GetVideoSurface(), 0,0, SCREENWIDTH, SCREENHEIGHT);
-	SDL_Flip(screen);
-
-	// Dump 2x surface
-	SDL_FreeSurface(lcd_surface2x);
-
-	// Screen has been updated, don't need to do it again until changes are made
-	lcd_lastupdate = 0;
-}
-
-
-
-//----------------------------------------------------------------------------
-//
 //  Emulates writing to Mailstation LCD device
 //
 void writeLCD(uint16_t newaddr, uint8_t val, int lcdnum)
 {
 	uint8_t *lcd_ptr;
-	if (lcdnum == LCD_LEFT) lcd_ptr = ms.lcd_dat1bit;
+	if (lcdnum == MS_LCD_LEFT) lcd_ptr = ms.lcd_dat1bit;
 	/* XXX: Fix the use of this magic number, replace with a const */
 	else lcd_ptr = &ms.lcd_dat1bit[4800];
 	if (!lcd_ptr) return;
@@ -182,7 +116,7 @@ void writeLCD(uint16_t newaddr, uint8_t val, int lcdnum)
 		// Reverse column # (MS col #0 starts on right side)
 		int x = 19 - lcd_cas;
 		// Use right half if necessary
-		if (lcdnum == LCD_RIGHT) x += 20;
+		if (lcdnum == MS_LCD_RIGHT) x += 20;
 
 		// Write out all 8 bits to separate bytes, using the current emulated LCD color
 		int n;
@@ -208,7 +142,7 @@ void writeLCD(uint16_t newaddr, uint8_t val, int lcdnum)
 uint8_t readLCD(uint16_t newaddr, int lcdnum)
 {
 	uint8_t *lcd_ptr;
-	if (lcdnum == LCD_LEFT) lcd_ptr = ms.lcd_dat1bit;
+	if (lcdnum == MS_LCD_LEFT) lcd_ptr = ms.lcd_dat1bit;
 	/* XXX: Fix the use of this magic number, replace with a const */
 	else lcd_ptr = &ms.lcd_dat1bit[4800];
 	if (!lcd_ptr) return 0;
@@ -229,79 +163,11 @@ uint8_t readLCD(uint16_t newaddr, int lcdnum)
 }
 
 
-
-//----------------------------------------------------------------------------
-//
-//  Graphically prints a character to the SDL screen
-//
-void printcharXY(char mychar, int x, int y)
-{
-	SDL_Rect letterarea;
-	SDL_Rect charoutarea;
-
-	// CGA font characters are 8x8
-	letterarea.w = letterarea.h = charoutarea.w = charoutarea.h = 8;
-	letterarea.x = 0;
-	letterarea.y = 8 * mychar;
-	charoutarea.x = x;
-	charoutarea.y = y;
-
-	//SDL_GetVideoSurface()
-	if (SDL_BlitSurface(cgafont_surface, &letterarea, lcd_surface, &charoutarea) != 0) printf("Error blitting text\n");
-}
-
-
-//----------------------------------------------------------------------------
-//
-//  Graphically prints a string at the specified X/Y coords
-//
-void printstringXY(char *mystring, int x, int y)
-{
-	while (*mystring)
-	{
-		printcharXY(*mystring,x,y);
-		mystring++;
-		// CGA font characters are 8x8
-		x+=8;
-		if (x > lcd_surface->w) { x = 0; y += 8; } //Move to the next line
-	}
-}
-
-//----------------------------------------------------------------------------
-//
-//  Graphically prints a string centered at the specified Y coordinate
-//
-void printstring_centered(char *mystring, int y)
-{
-	int surface_cols = lcd_surface->w / 8;
-	int x = (surface_cols - strlen(mystring)) / 2;
-	printstringXY(mystring, x * 8, y);
-}
-
-
-//----------------------------------------------------------------------------
-//
-//  Graphically prints a string at the current cursor position
-//
-void printstring(char *mystring)
-{
-	while (*mystring)
-	{
-		if (*mystring == '\n') { cursorX = 0; cursorY++; mystring++; continue; }
-		printcharXY(*mystring,cursorX * 8, cursorY * 8);
-		mystring++;
-		cursorX++;
-		if (cursorX * 8 >= lcd_surface->w) { cursorX = 0; cursorY++; }
-		if (cursorY * 8 >= lcd_surface->h) cursorY = 0;
-	}
-}
-
-
 /* Read a uint8_t from the RAM buffer
  *
  * TODO: Add a debug hook here
  */
-inline uint8_t readRAM(unsigned int translated_addr)
+uint8_t readRAM(unsigned int translated_addr)
 {
 	return ms.ram[translated_addr];
 }
@@ -310,7 +176,7 @@ inline uint8_t readRAM(unsigned int translated_addr)
  *
  * TODO: Add a debug hook here
  */
-inline void writeRAM(unsigned int translated_addr, uint8_t val)
+void writeRAM(unsigned int translated_addr, uint8_t val)
 {
 	ms.ram[translated_addr] = val;
 }
@@ -379,7 +245,7 @@ unsigned Z80_RDMEM(dword A)
 		return readRAM(translated_addr);
 
 	  case 2: /* LCD, left side */
-		return readLCD(newaddr, LCD_LEFT);
+		return readLCD(newaddr, MS_LCD_LEFT);
 		case 3: /* Dataflash */
 		if (current_page >= 32) {
 			log_error("[%04X] * INVALID DATAFLASH PAGE: %d\n",
@@ -388,7 +254,7 @@ unsigned Z80_RDMEM(dword A)
 		return readDataflash(translated_addr);
 
 	  case 4: /* LCD, right side */
-		return readLCD(newaddr, LCD_RIGHT);
+		return readLCD(newaddr, MS_LCD_RIGHT);
 
 	  case 5: /* MODEM */
 		log_debug("[%04X] * READ FROM MODEM UNSUPPORTED: %04X\n",
@@ -477,7 +343,7 @@ void Z80_WRMEM(dword A,uint8_t val)
 		break;
 
 	  case 2: /* LCD, left side */
-		writeLCD(newaddr, val, LCD_LEFT);
+		writeLCD(newaddr, val, MS_LCD_LEFT);
 		break;
 
 	  case 3: /* Dataflash */
@@ -489,7 +355,7 @@ void Z80_WRMEM(dword A,uint8_t val)
 		break;
 
 	  case 4: /* LCD, right side */
-		writeLCD(newaddr, val, LCD_RIGHT);
+		writeLCD(newaddr, val, MS_LCD_RIGHT);
 		break;
 
 	  case 5: /* MODEM */
@@ -821,98 +687,8 @@ void powerOff()
 	poweroff = 1;
 
 	// clear LCD
-	memset(ms.lcd_dat8bit, 0, 320*240);
-	printstring_centered("Mailstation Emulator", 4 * 8);
-	printstring_centered("v0.1a", 5 * 8);
-	printstring_centered("Created by Jeff Bowman", 8 * 8);
-	printstring_centered("(fyberoptic@gmail.com)", 9 * 8);
-	printstring_centered("F12 to Start", 15 * 8);
-
-	drawLCD();
-}
-
-/* XXX: This needs rework still*/
-void msemustartSDL(void)
-{
-	SDL_Surface *cgafont_tmp = NULL;
-	SDL_Color fontcolors[2];
-
-	SDL_Init( SDL_INIT_VIDEO );
-
-	/* Set up colors to be used by the LCD display from the MailStation */
-	/* TODO: Can this be done as a single 24bit quantity?
-	 */
-	memset(colors,0,sizeof(SDL_Color) * 6);
-	/* Black */
-	colors[0].r = 0x00; colors[0].g = 0x00; colors[0].b = 0x00;
-	/* Green */
-	colors[1].r = 0x00; colors[1].g = 0xff; colors[1].b = 0x00;
-	/* LCD Off-Green */
-	colors[2].r = 0x9d; colors[2].g = 0xe0; colors[2].b = 0x8c;
-	/* LCD Pixel Black */
-	colors[3].r = 0x26; colors[3].g = 0x21; colors[3].b = 0x14;
-	/* Blue */
-	colors[4].r = 0x00; colors[4].g = 0x00; colors[4].b = 0xff;
-	/* Yellow */
-	colors[5].r = 0xff; colors[5].g = 0xff; colors[5].b = 0x00;
-
-
-	/* Set up SDL screen
-	 *
-	 * TODO:
-	 *   Worth implementing a resize feature?
-	 */
-	screen = SDL_SetVideoMode(SCREENWIDTH*2, SCREENHEIGHT*2, 8,
-	  SDL_HWPALETTE);
-	/*XXX: Check screen value */
-	if (SDL_SetPalette(screen, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 6) != 1) {
-		printf("Error setting palette\n");
-	}
-
-	// Set window caption
-	SDL_WM_SetCaption("Mailstation Emulator", NULL);
-
-
-
-	/* XXX: This color set up is really strange, fontcolors sets up yellow
-	 * on black font. However, it seems to be linked with the colors
-	 * array above. If one were to remove colors[5], that causes the
-	 * font color to cange. I hope that moving to a newer SDL version
-	 * will improve this.
-	 */
-	// Load embedded font for graphical print commands
-	cgafont_tmp = SDL_CreateRGBSurfaceFrom((uint8_t*)rawcga_start,
-	  8, 2048, 1, 1,  0,0,0,0);
-	if (cgafont_tmp == NULL) {
-		printf("Error creating font surface\n");
-		//return 1;
-	}
-
-	// Setup font palette
-	memset(fontcolors, 0, sizeof(fontcolors));
-	// Use yellow foreground, black background
-	fontcolors[1].r = fontcolors[1].g = 0xff;
-	// Write palette to surface
-	if (SDL_SetPalette(cgafont_tmp, SDL_LOGPAL|SDL_PHYSPAL, fontcolors,
-	  0, 2) != 1) {
-		printf("Error setting palette on font\n");
-	}
-
-	// Convert the 1-bit font surface to match the display
-	cgafont_surface = SDL_DisplayFormat(cgafont_tmp);
-	// Free the 1-bit version
-	SDL_FreeSurface(cgafont_tmp);
-
-
-	// Create 8-bit LCD surface for drawing to emulator screen
-	lcd_surface = SDL_CreateRGBSurfaceFrom(ms.lcd_dat8bit, 320, 240, 8, 320, 0,0,0,0);
-	if (lcd_surface == NULL) {
-		printf("Error creating LCD surface\n");
-		//return 1;
-	}
-
-	// Set palette for LCD to global palette
-	if (SDL_SetPalette(lcd_surface, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 6) != 1) printf("Error setting palette on LCD\n");
+	memset(ms.lcd_dat8bit, 0, MS_LCD_WIDTH * MS_LCD_HEIGHT);
+	ui_drawSplashScreen();
 }
 
 /* Main
@@ -1000,9 +776,9 @@ int main(int argc, char *argv[])
 	ms.dataflash = (uint8_t *)calloc(MEBIBYTE/2, sizeof(uint8_t));
 	ms.ram = (uint8_t *)calloc(MEBIBYTE/8, sizeof(uint8_t));
 	ms.io = (uint8_t *)calloc(MEBIBYTE/16, sizeof(uint8_t));
-	ms.lcd_dat1bit = (uint8_t *)calloc(((SCREENWIDTH * SCREENHEIGHT) / 8),
+	ms.lcd_dat1bit = (uint8_t *)calloc(((MS_LCD_WIDTH * MS_LCD_HEIGHT) / 8),
 	  sizeof(uint8_t));
-	ms.lcd_dat8bit = (uint8_t *)calloc(  SCREENWIDTH * SCREENHEIGHT,
+	ms.lcd_dat8bit = (uint8_t *)calloc(  MS_LCD_WIDTH * MS_LCD_HEIGHT,
 	  sizeof(uint8_t));
 
 	/* Set up keyboard emulation array */
@@ -1041,10 +817,7 @@ int main(int argc, char *argv[])
 	/* TODO: Add git tags to this, because thats neat */
 	printf("\nMailstation Emulator v0.1\n");
 
-	msemustartSDL();
-
-
-
+	ui_init(&raw_cga_array[0], ms.lcd_dat8bit);
 
 	/* Set up and start Z80 emulation */
 	Z80_Reset();			/* Reset CPU state */
@@ -1080,9 +853,10 @@ int main(int argc, char *argv[])
 		/* NOTE: Cursory glance suggests the screen updates 20ms after
 		 * the screen array changed.
 		 */
-		if ((lcd_lastupdate != 0) &&
+		if (!poweroff && (lcd_lastupdate != 0) &&
 		  (currenttick - lcd_lastupdate >= 20)) {
-			drawLCD();
+			ui_drawLCD();
+			lcd_lastupdate = 0;
 		}
 
 		/* Write dataflash buffer to disk if it was modified */
