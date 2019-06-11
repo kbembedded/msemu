@@ -1,6 +1,8 @@
-#include "msemu.h"
 #include "flashops.h"
+
+#include "msemu.h"
 #include "logger.h"
+#include <z80ex/z80ex.h>
 
 extern struct mshw ms;
 
@@ -33,7 +35,7 @@ inline void writeCodeFlash(uint32_t translated_addr)
  *
  * TODO: Add debugging potential here
  */
-inline byte readDataflash(unsigned int translated_addr)
+inline uint8_t readDataflash(unsigned int translated_addr)
 {
 	return ms.dataflash[translated_addr];
 }
@@ -51,7 +53,7 @@ inline byte readDataflash(unsigned int translated_addr)
  *
  * TODO: Add debugging hook here.
  */
-int8_t writeDataflash(unsigned int translated_addr, byte val)
+int8_t writeDataflash(unsigned int translated_addr, uint8_t val)
 {
 	static uint8_t cycle;
 	static uint8_t cmd;
@@ -60,13 +62,13 @@ int8_t writeDataflash(unsigned int translated_addr, byte val)
 	if (!cycle) {
 		switch (val) {
 		  case 0xFF: /* Reset dataflash, single cycle */
-			log_debug("[%04X] * Dataflash Reset\n", Z80_GetPC());
+			log_debug("[%04X] * Dataflash Reset\n", z80ex_get_reg(ms.z80, regPC));
 			break;
 		  case 0x00: /* Not sure what cmd is, but only one cycle? */
-			log_debug("[%04X] * Dataflash cmd 0x00\n", Z80_GetPC());
+			log_debug("[%04X] * Dataflash cmd 0x00\n", z80ex_get_reg(ms.z80, regPC));
 			break;
 		  case 0xC3: /* Not sure what cmd is, but only one cycle? */
-			log_debug("[%04X] * Dataflash cmd 0xC3\n", Z80_GetPC());
+			log_debug("[%04X] * Dataflash cmd 0xC3\n", z80ex_get_reg(ms.z80, regPC));
 			break;
 		  default:
 			cmd = val;
@@ -79,13 +81,13 @@ int8_t writeDataflash(unsigned int translated_addr, byte val)
 			if (val != 0xD0) break;
 			translated_addr &= 0xFFFFFF00;
 			log_debug("[%04X] * Dataflash Sector-Erase: 0x%X\n",
-			  Z80_GetPC(), translated_addr);
+			  z80ex_get_reg(ms.z80, regPC), translated_addr);
 			memset(&ms.dataflash[translated_addr], 0xFF, 0x100);
 			modified = 1;
 			break;
 		  case 0x10: /* Byte program */
 			log_debug("[%04X] * Dataflash Byte-Prog: 0x%X = %02X\n",
-			  Z80_GetPC(),translated_addr,val);
+			  z80ex_get_reg(ms.z80, regPC),translated_addr,val);
 			ms.dataflash[translated_addr] = val;
 			modified = 1;
 			break;
@@ -96,12 +98,12 @@ int8_t writeDataflash(unsigned int translated_addr, byte val)
 			modified = 1;
 			break;
 		  case 0x90: /* Read ID */
-			log_debug("[%04X] * Dataflash Read ID\n", Z80_GetPC());
+			log_debug("[%04X] * Dataflash Read ID\n", z80ex_get_reg(ms.z80, regPC));
 			break;
 		  default:
 			log_error(
 			  "[%04X] * INVALID DATAFLASH CMD SEQ: %02X %02X\n",
-			  Z80_GetPC(), cmd, val);
+			  z80ex_get_reg(ms.z80, regPC), cmd, val);
 			break;
 		}
 		cycle = 0;

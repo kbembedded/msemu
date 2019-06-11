@@ -1,12 +1,12 @@
 
 CC = gcc
-LIBS = -lSDLmain  -lSDL  -lSDL_gfx
+LIBS = -lz80ex  -lSDLmain  -lSDL  -lSDL_gfx
 OUTFILE = msemu
 
 
 # Check if Windows
 ifeq (${OS},Windows_NT)
-	USINGMINGW = -mwindows -lmingw32  
+	USINGMINGW = -mwindows -lmingw32
 	OUTFILE = msemu.exe
 endif
 
@@ -27,8 +27,8 @@ endif
 
 
 msemu.exe: msemu.o flashops.o logger.o ui.o
-	$(CC) $(CFLAGS) z80em/Z80.o z80em/Z80Debug.o logger.o flashops.o ui.o msemu.o  -o $(OUTFILE) $(USINGMINGW) $(LIBS) 
-	
+	$(CC) $(CFLAGS) logger.o flashops.o ui.o msemu.o  -o $(OUTFILE) $(USINGMINGW) $(LIBS)
+
 msemu.o: msemu.c
 	$(CC) $(CFLAGS) -c msemu.c -o msemu.o
 
