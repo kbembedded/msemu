@@ -17,10 +17,10 @@
 #include "msemu.h"
 #include "flashops.h"
 #include "ui.h"
-#include "z80em/Z80.h"
-#include "z80em/Z80IO.h"
+
 #include <SDL/SDL.h>
 #include <SDL/SDL_rotozoom.h>
+#include <z80ex/z80ex.h>
 
 struct mshw ms;
 
@@ -145,7 +145,10 @@ uint8_t readLCD(uint16_t newaddr, int lcdnum)
  */
 uint8_t readRAM(unsigned int translated_addr)
 {
-	return ms.ram[translated_addr];
+	uint8_t val = ms.ram[translated_addr];
+	log_debug("[%04X] * READ RAM: addr %04X = %02X\n",
+			  z80ex_get_reg(ms.z80, regPC), translated_addr, val);
+	return val;
 }
 
 /* Write a uint8_t to the RAM buffer
@@ -154,12 +157,14 @@ uint8_t readRAM(unsigned int translated_addr)
  */
 void writeRAM(unsigned int translated_addr, uint8_t val)
 {
+	log_debug("[%04X] * WRITE RAM: addr %04X = %02X\n",
+			  z80ex_get_reg(ms.z80, regPC), translated_addr, val);
 	ms.ram[translated_addr] = val;
 }
 
 
 
-/* z80em Read memory callback function.
+/* z80ex Read memory callback function.
  *
  * Return a uint8_t from the address given to us.
  * This function needs to figure out what slot the requested address lies in,
@@ -169,9 +174,13 @@ void writeRAM(unsigned int translated_addr, uint8_t val)
  * slotted page of the requested device.
  */
 /* XXX: Can the current page/device logic be cleaned up to flow better? */
-unsigned Z80_RDMEM(dword A)
+// TODO: Actually use cpu/user_data instead of globals.
+Z80EX_BYTE z80ex_mread(
+	Z80EX_CONTEXT *cpu,
+	Z80EX_WORD addr,
+	int m1_state,
+	void *user_data)
 {
-	uint16_t addr = (uint16_t)A;
 	uint16_t newaddr = 0;
 	uint8_t current_page = 0;
 	uint8_t current_device = 0;
@@ -209,14 +218,14 @@ unsigned Z80_RDMEM(dword A)
 	  case 0: /* Codeflash */
 		if (current_page >= 64) {
 			log_error("[%04X] * INVALID CODEFLASH PAGE: %d\n",
-			  Z80_GetPC(),current_page);
+			  z80ex_get_reg(ms.z80, regPC),current_page);
 		}
 		return readCodeFlash(translated_addr);
 
 	  case 1: /* Dataflash */
 		if (current_page >= 8) {
 			log_error("[%04X] * INVALID RAM PAGE: %d\n",
-			  Z80_GetPC(), current_page);
+			  z80ex_get_reg(ms.z80, regPC), current_page);
 		}
 		return readRAM(translated_addr);
 
@@ -225,7 +234,7 @@ unsigned Z80_RDMEM(dword A)
 		case 3: /* Dataflash */
 		if (current_page >= 32) {
 			log_error("[%04X] * INVALID DATAFLASH PAGE: %d\n",
-			  Z80_GetPC(), current_page);
+			  z80ex_get_reg(ms.z80, regPC), current_page);
 		}
 		return readDataflash(translated_addr);
 
@@ -234,12 +243,12 @@ unsigned Z80_RDMEM(dword A)
 
 	  case 5: /* MODEM */
 		log_debug("[%04X] * READ FROM MODEM UNSUPPORTED: %04X\n",
-		  Z80_GetPC(), newaddr);
+		  z80ex_get_reg(ms.z80, regPC), newaddr);
 		break;
 
 	  default:
 		log_error("[%04X] * READ FROM UNKNOWN DEVICE: %d\n",
-		  Z80_GetPC(), current_device);
+		  z80ex_get_reg(ms.z80, regPC), current_device);
 		break;
 	}
 
@@ -247,7 +256,7 @@ unsigned Z80_RDMEM(dword A)
 }
 
 
-/* z80em Write memory callback function.
+/* z80ex Write memory callback function.
  *
  * Write a uint8_t to the address given to us.
  * This function needs to figure out what slot the requested address lies in,
@@ -257,9 +266,13 @@ unsigned Z80_RDMEM(dword A)
  * slotted page of the requested device.
  */
 /* XXX: Can the current page/device logic be cleaned up to flow better? */
-void Z80_WRMEM(dword A,uint8_t val)
+// TODO: Actually use cpu/user_data instead of globals.
+void z80ex_mwrite(
+	Z80EX_CONTEXT *cpu,
+	Z80EX_WORD addr,
+	Z80EX_BYTE val,
+	void *user_data)
 {
-	uint16_t addr = (uint16_t)A;
 	uint16_t newaddr = 0;
 	uint8_t current_page = 0;
 	uint8_t current_device = 0;
@@ -270,7 +283,7 @@ void Z80_WRMEM(dword A,uint8_t val)
 	if (addr < 0x4000)
 	{
 		log_error("[%04X] * CAN'T WRITE TO CODEFLASH SLOT 0: 0x%X\n",
-		  Z80_GetPC(), addr);
+		  z80ex_get_reg(ms.z80, regPC), addr);
 		return;
 	}
 
@@ -307,13 +320,13 @@ void Z80_WRMEM(dword A,uint8_t val)
 	switch(current_device & 0x0F) {
 	  case 0: /* Codeflash */
 		log_error("[%04X] * WRITE TO CODEFLASH UNSUPPORTED\n",
-		  Z80_GetPC());
+		  z80ex_get_reg(ms.z80, regPC));
 		break;
 
 	  case 1: /* RAM */
 		if (current_page >= 8) {
 			log_error("[%04X] * INVALID RAM PAGE: %d\n",
-			  Z80_GetPC(), current_page);
+			  z80ex_get_reg(ms.z80, regPC), current_page);
 		}
 		writeRAM(translated_addr, val);
 		break;
@@ -325,7 +338,7 @@ void Z80_WRMEM(dword A,uint8_t val)
 	  case 3: /* Dataflash */
 		if (current_page >= 32) {
 			log_error("[%04X] * INVALID DATAFLASH PAGE: %d\n",
-			  Z80_GetPC(), current_page);
+			  z80ex_get_reg(ms.z80, regPC), current_page);
 		}
 		ms.dataflash_updated = writeDataflash(translated_addr, val);
 		break;
@@ -336,12 +349,12 @@ void Z80_WRMEM(dword A,uint8_t val)
 
 	  case 5: /* MODEM */
 		log_debug("[%04X] WRITE TO MODEM UNSUPPORTED: %04X %02X\n",
-		  Z80_GetPC(), newaddr, val);
+		  z80ex_get_reg(ms.z80, regPC), newaddr, val);
 		break;
 
 	  default:
 		log_error("[%04X] * WRITE TO UNKNOWN DEVICE: %d\n",
-		  Z80_GetPC(), current_device);
+		  z80ex_get_reg(ms.z80, regPC), current_device);
 		break;
 	}
 }
@@ -350,18 +363,22 @@ void Z80_WRMEM(dword A,uint8_t val)
 
 //----------------------------------------------------------------------------
 //
-//  Z80em I/O port input handler
+//  z80ex I/O port input handler
 //
-uint8_t Z80_In (uint8_t Port)
+// TODO: Actually use cpu/user_data instead of globals.
+Z80EX_BYTE z80ex_pread (
+	Z80EX_CONTEXT *cpu,
+	Z80EX_WORD port,
+	void *user_data)
 {
-	uint16_t addr = (uint16_t)Port;
+	uint16_t addr = port;
 
 	// This is for the RTC on P10-1C
 	time_t theTime;
 	time( &theTime );
 	struct tm *rtc_time = localtime(&theTime);
 
-	log_debug("[%04X] * IO <- %04X - %02X\n", Z80_GetPC(), addr,ms.io[addr]);
+	log_debug("[%04X] * IO <- %04X - %02X\n", z80ex_get_reg(ms.z80, regPC), addr,ms.io[addr]);
 
 	//if (addr < 5 || addr > 8) printf("* IO <- %04X - %02X\n",addr,ms.io[addr]);
 
@@ -465,15 +482,20 @@ uint8_t Z80_In (uint8_t Port)
 
 //----------------------------------------------------------------------------
 //
-//  Z80em I/O port output handler
+//  z80ex I/O port output handler
 //
 /* XXX: Clean up this LED code at some point, have "real" LED on SDL window */
-void Z80_Out (uint8_t Port,uint8_t val)
+// TODO: Actually use cpu/user_data instead of globals.
+void z80ex_pwrite (
+	Z80EX_CONTEXT *cpu,
+	Z80EX_WORD port,
+	Z80EX_BYTE val,
+	void *user_data)
 {
-	uint16_t addr = (uint16_t)Port;
+	uint16_t addr = port;
 	static uint8_t tmp_reg;
 
-	log_debug("[%04X] * IO -> %04X - %02X\n",Z80_GetPC(), addr, val);
+	log_debug("[%04X] * IO -> %04X - %02X\n",z80ex_get_reg(ms.z80, regPC), addr, val);
 
 	//if (addr < 5 || addr > 8) printf("* IO -> %04X - %02X\n",addr, val);
 
@@ -580,35 +602,38 @@ void generateKeyboardMatrix(int scancode, int eventtype)
 	}
 }
 
-
-//----------------------------------------------------------------------------
-//
-//  Z80em library declarations
-//
-
 // Current IRQ status. Checked after EI occurs.  We won't need it (for now).
-int Z80_IRQ;
+// TODO: Z80em - is there a z80ex equivalent?
+// int Z80_IRQ;
 
 // Run after a RETI
-void Z80_Reti (void)
+// TODO: Actually use cpu/user_data instead of globals.
+void z80ex_reti (
+	Z80EX_CONTEXT *cpu,
+	void *user_data)
 {
 	return;
 }
 
 // Run after a RETN
-void Z80_Retn (void)
-{
-	return;
-}
+// TODO: Z80em - is there a z80ex equivalent?
+// void Z80_Retn (void)
+// {
+// 	return;
+// }
 
 // Can emulate stuff which we don't need
-void Z80_Patch (Z80_Regs *Regs)
-{
-	return;
-}
+// TODO: Z80em - is there a z80ex equivalent?
+// void Z80_Patch (Z80_Regs *Regs)
+// {
+// 	return;
+// }
 
 // Handler fired when Z80_ICount hits 0
-int Z80_Interrupt(void)
+// TODO: Actually use cpu/user_data instead of globals.
+Z80EX_BYTE z80ex_intread (
+	Z80EX_CONTEXT *cpu,
+	void *user_data)
 {
 	static int icount = 0;
 
@@ -621,7 +646,7 @@ int Z80_Interrupt(void)
 		if (ms.io[3] & 0x10 && !(ms.interrupt_mask & 0x10))
 		{
 			ms.interrupt_mask |= 0x10;
-			return Z80_NMI_INT;
+			return -2; //Z80_NMI_INT;
 		}
 	}
 
@@ -629,11 +654,11 @@ int Z80_Interrupt(void)
 	if (ms.io[3] & 2 && !(ms.interrupt_mask & 2))
 	{
 		ms.interrupt_mask |= 2;
-		return Z80_NMI_INT;
+		return -2; //Z80_NMI_INT;
 	}
 
 	// Otherwise ignore this
-	return Z80_IGNORE_INT;
+	return -1; //Z80_IGNORE_INT;
 }
 
 
@@ -650,7 +675,7 @@ void resetMailstation()
 	memset(ms.ram,0,128 * 1024);
 	ms.power_state = MS_POWERSTATE_ON;
 	ms.interrupt_mask = 0;
-	Z80_Reset();
+	z80ex_reset(ms.z80);
 }
 
 
@@ -807,13 +832,25 @@ int main(int argc, char *argv[])
 
 	ui_init(&raw_cga_array[0], ms.lcd_dat8bit);
 
+	ms.z80 = z80ex_create(
+		z80ex_mread, (void*)&ms,
+		z80ex_mwrite, (void*)&ms,
+		z80ex_pread, (void*)&ms,
+		z80ex_pwrite, (void*)&ms,
+		z80ex_intread, (void*)&ms
+	);
+	z80ex_set_reti_callback(ms.z80, z80ex_reti, (void*)&ms);
+
 	/* Set up and start Z80 emulation */
-	Z80_Reset();			/* Reset CPU state */
-	Z80_Running = 1;		/* When 0, emulation terminates */
-	Z80_ICount = 0;			/* T-state count */
-	Z80_IRQ = Z80_IGNORE_INT;	/* Current IRQ status. */
-	/* MS runs at 12 MHz, divide by 64 for KB IRQ rate */
-	Z80_IPeriod = 187500;		/* Number of T-states per interrupt */
+	z80ex_reset(ms.z80);			/* Reset CPU state */
+
+	// TODO: These are old Z80em bindings,
+	//   they seem kind of important...
+	// Z80_Running = 1;		/* When 0, emulation terminates */
+	// Z80_ICount = 0;			/* T-state count */
+	// Z80_IRQ = Z80_IGNORE_INT;	/* Current IRQ status. */
+	// /* MS runs at 12 MHz, divide by 64 for KB IRQ rate */
+	// Z80_IPeriod = 187500;		/* Number of T-states per interrupt */
 
 	// Display startup message
 	powerOff();
@@ -844,7 +881,7 @@ int main(int argc, char *argv[])
 			execute_counter += currenttick - lasttick;
 			if (execute_counter > 15) {
 				execute_counter = 0;
-				Z80_Execute();
+				z80ex_step(ms.z80);
 			}
 		}
 
