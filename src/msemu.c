@@ -146,7 +146,7 @@ uint8_t readLCD(uint16_t newaddr, int lcdnum)
 uint8_t readRAM(unsigned int translated_addr)
 {
 	uint8_t val = ms.ram[translated_addr];
-	log_debug("[%04X] * READ RAM: addr %04X = %02X\n",
+	log_debug("[%04X] * RAM [%04X] -> %02X\n",
 			  z80ex_get_reg(ms.z80, regPC), translated_addr, val);
 	return val;
 }
@@ -157,7 +157,7 @@ uint8_t readRAM(unsigned int translated_addr)
  */
 void writeRAM(unsigned int translated_addr, uint8_t val)
 {
-	log_debug("[%04X] * WRITE RAM: addr %04X = %02X\n",
+	log_debug("[%04X] * RAM [%04X] <- %02X\n",
 			  z80ex_get_reg(ms.z80, regPC), translated_addr, val);
 	ms.ram[translated_addr] = val;
 }
@@ -378,7 +378,7 @@ Z80EX_BYTE z80ex_pread (
 	time( &theTime );
 	struct tm *rtc_time = localtime(&theTime);
 
-	log_debug("[%04X] * IO <- %04X - %02X\n", z80ex_get_reg(ms.z80, regPC), addr,ms.io[addr]);
+	log_debug("[%04X] * IO  [%04X] -> %02X\n", z80ex_get_reg(ms.z80, regPC), addr,ms.io[addr]);
 
 	//if (addr < 5 || addr > 8) printf("* IO <- %04X - %02X\n",addr,ms.io[addr]);
 
@@ -495,7 +495,7 @@ void z80ex_pwrite (
 	uint16_t addr = port;
 	static uint8_t tmp_reg;
 
-	log_debug("[%04X] * IO -> %04X - %02X\n",z80ex_get_reg(ms.z80, regPC), addr, val);
+	log_debug("[%04X] * IO  [%04X] <- %02X\n",z80ex_get_reg(ms.z80, regPC), addr, val);
 
 	//if (addr < 5 || addr > 8) printf("* IO -> %04X - %02X\n",addr, val);
 

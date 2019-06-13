@@ -15,7 +15,10 @@ extern struct mshw ms;
  */
 inline uint8_t readCodeFlash(uint32_t translated_addr)
 {
-	return ms.codeflash[translated_addr];
+	uint8_t val = ms.codeflash[translated_addr];
+	log_debug("[%04X] * CF  [%04X] -> %02X\n",
+		z80ex_get_reg(ms.z80, regPC), translated_addr, val);
+	return val;
 }
 
 /* Write a byte to codeflash buffer
@@ -37,7 +40,10 @@ inline void writeCodeFlash(uint32_t translated_addr)
  */
 inline uint8_t readDataflash(unsigned int translated_addr)
 {
-	return ms.dataflash[translated_addr];
+	uint8_t val = ms.dataflash[translated_addr];
+	log_debug("[%04X] * DF  [%04X] -> %02X\n",
+		z80ex_get_reg(ms.z80, regPC), translated_addr, val);
+	return val;
 }
 
 
@@ -86,7 +92,7 @@ int8_t writeDataflash(unsigned int translated_addr, uint8_t val)
 			modified = 1;
 			break;
 		  case 0x10: /* Byte program */
-			log_debug("[%04X] * Dataflash Byte-Prog: 0x%X = %02X\n",
+			log_debug("[%04X] * DF  [%04X] <- %02X\n",
 			  z80ex_get_reg(ms.z80, regPC),translated_addr,val);
 			ms.dataflash[translated_addr] = val;
 			modified = 1;
