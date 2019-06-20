@@ -142,6 +142,7 @@ int buftoflash(uint8_t *buf, const char *file_path, ssize_t sz)
 	FILE *fd;
 
 	/* XXX: Move this print to debug out */
+	/* XXX: Check error codes */
 	printf("Writing dataflash...\n");
 	fd = fopen(file_path, "wb");
 	fwrite(buf, sizeof(uint8_t), sz, fd);

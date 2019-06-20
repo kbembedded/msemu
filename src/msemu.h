@@ -14,15 +14,48 @@
 #define MS_LCD_LEFT 	1
 #define MS_LCD_RIGHT 	2
 
+// Power state constants
+#define MS_POWERSTATE_ON  1
+#define MS_POWERSTATE_OFF 0
+
 struct mshw {
 	uint8_t *ram;
 	uint8_t *io;
+
 	uint8_t *lcd_dat8bit;
 	/* TODO: Might be able to remove this 1bit screen representation */
 	uint8_t *lcd_dat1bit;
+
+	// Stores current LCD column.
+	uint8_t lcd_cas;
+
+	// timestamp of last lcd draw, used to decide
+	// whether the lcd should be redrawn.
+	uint32_t lcd_lastupdate;
+
+	// Bits specify which interrupts have been triggered (returned on P3)
+	uint8_t interrupt_mask;
+
+	// Stores the page/device numbers of the two middle 16KB slots of address space
+	uint8_t slot4000_page;
+	uint8_t slot4000_device;
+	uint8_t slot8000_page;
+	uint8_t slot8000_device;
+
 	uint8_t *codeflash;
 	uint8_t *dataflash;
+
+	// Signals if the dataflash contents have been changed.
+	// Should be cleared once dataflash is written back to disk.
+	uint8_t dataflash_updated;
+
 	uint8_t key_matrix[10];
+
+	// Holds power button status (returned in P9.4)
+	uint8_t power_button;
+
+	// Holds current power state (on or off)
+	uint8_t power_state;
 };
 
 #endif // __MSEMU_H_

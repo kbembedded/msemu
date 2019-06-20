@@ -24,33 +24,9 @@
 
 struct mshw ms;
 
-// Stores current Mailstation LCD column
-uint8_t lcd_cas = 0;
-
-// Last SDL tick at which LCD was updated.  Used for timing LCD refreshes to screen.
-uint32_t lcd_lastupdate = 0;
-
 // Default entry of color palette to draw Mailstation LCD with
 uint8_t LCD_fg_color = 3;  // LCD black
 uint8_t LCD_bg_color = 2;  // LCD green
-
-// Bits specify which interrupts have been triggered (returned on P3)
-uint8_t interrupts_active = 0;
-
-// This is set if the dataflash contents are changed, so that we can write the contents to file.
-int8_t dataflash_updated = 0;
-
-// This is set if hardware power off is detected (via P28), to halt emulation
-int poweroff = 0;
-
-// Stores the page/device numbers of the two middle 16KB slots of address space
-uint8_t slot4000_page = 0;
-uint8_t slot4000_device = 0;
-uint8_t slot8000_page = 0;
-uint8_t slot8000_device = 0;
-
-// Holds power button status (returned in P9.4)
-uint8_t power_button = 0;
 
 // This table translates PC scancodes to the Mailstation key matrix
 int32_t keyTranslateTable[10][8] = {
@@ -105,7 +81,7 @@ void writeLCD(uint16_t newaddr, uint8_t val, int lcdnum)
 	{
 		// Write data to currently selected LCD column.
 		// This is just used for reading back LCD contents to the Mailstation quickly.
-		lcd_ptr[newaddr + (lcd_cas * 240)] = val;
+		lcd_ptr[newaddr + (ms.lcd_cas * 240)] = val;
 
 
 		/*
@@ -114,7 +90,7 @@ void writeLCD(uint16_t newaddr, uint8_t val, int lcdnum)
 		*/
 
 		// Reverse column # (MS col #0 starts on right side)
-		int x = 19 - lcd_cas;
+		int x = 19 - ms.lcd_cas;
 		// Use right half if necessary
 		if (lcdnum == MS_LCD_RIGHT) x += 20;
 
@@ -126,11 +102,11 @@ void writeLCD(uint16_t newaddr, uint8_t val, int lcdnum)
 		}
 
 		// Let main loop know to update screen with new LCD data
-		lcd_lastupdate = SDL_GetTicks();
+		ms.lcd_lastupdate = SDL_GetTicks();
 	}
 
 	// If CAS line is low, set current column instead
-	else	lcd_cas = val;
+	else	ms.lcd_cas = val;
 
 }
 
@@ -154,11 +130,11 @@ uint8_t readLCD(uint16_t newaddr, int lcdnum)
 	if (ms.io[2] & 8)
 	{
 		// Return data on currently selected LCD column
-		return lcd_ptr[newaddr + (lcd_cas * 240)];
+		return lcd_ptr[newaddr + (ms.lcd_cas * 240)];
 	}
 
 	// Not sure what this normally returns when CAS bit low!
-	else return lcd_cas;
+	else return ms.lcd_cas;
 
 }
 
@@ -211,16 +187,16 @@ unsigned Z80_RDMEM(dword A)
 	if (addr >= 0x4000 && addr < 0x8000)
 	{
 		newaddr = addr - 0x4000;
-		current_page = slot4000_page;
-		current_device = slot4000_device;
+		current_page = ms.slot4000_page;
+		current_device = ms.slot4000_device;
 	}
 
 	// Slot 0x8000
 	if (addr >= 0x8000 && addr < 0xC000)
 	{
 		newaddr = addr - 0x8000;
-		current_page = slot8000_page;
-		current_device = slot8000_device;
+		current_page = ms.slot8000_page;
+		current_device = ms.slot8000_device;
 	}
 
 	unsigned int translated_addr = newaddr + (current_page * 0x4000);
@@ -309,16 +285,16 @@ void Z80_WRMEM(dword A,uint8_t val)
 	if (addr >= 0x4000 && addr < 0x8000)
 	{
 		newaddr = addr - 0x4000;
-		current_page = slot4000_page;
-		current_device = slot4000_device;
+		current_page = ms.slot4000_page;
+		current_device = ms.slot4000_device;
 	}
 
 	// Slot 0x8000
 	if (addr >= 0x8000 && addr < 0xC000)
 	{
 		newaddr = addr - 0x8000;
-		current_page = slot8000_page;
-		current_device = slot8000_device;
+		current_page = ms.slot8000_page;
+		current_device = ms.slot8000_device;
 	}
 
 	translated_addr = newaddr + (current_page * 0x4000);
@@ -351,7 +327,7 @@ void Z80_WRMEM(dword A,uint8_t val)
 			log_error("[%04X] * INVALID DATAFLASH PAGE: %d\n",
 			  Z80_GetPC(), current_page);
 		}
-		dataflash_updated = writeDataflash(translated_addr, val);
+		ms.dataflash_updated = writeDataflash(translated_addr, val);
 		break;
 
 	  case 4: /* LCD, right side */
@@ -433,7 +409,7 @@ uint8_t Z80_In (uint8_t Port)
 				p3.1 = Keyboard handler
 				p3.2 = null
 			*/
-			return interrupts_active;
+			return ms.interrupt_mask;
 			break;
 
 		// page/device ports
@@ -446,7 +422,7 @@ uint8_t Z80_In (uint8_t Port)
 
 		// acknowledge power good + power button status
 		case 0x09:
-			return (uint8_t)0xE0 | ((power_button & 1) << 4);
+			return (uint8_t)0xE0 | ((ms.power_button & 1) << 4);
 
 
 		// These are all for the RTC
@@ -525,32 +501,32 @@ void Z80_Out (uint8_t Port,uint8_t val)
 
 		// set interrupt masks
 		case 0x03:
-			interrupts_active &= val;
+			ms.interrupt_mask &= val;
 			ms.io[addr] = val;
 			break;
 
 		// set slot4000 page
 		case 0x05:
-			slot4000_page = val;
-			ms.io[addr] = slot4000_page;
+			ms.slot4000_page = val;
+			ms.io[addr] = ms.slot4000_page;
 			break;
 
 		// set slot4000 device
 		case 0x06:
-			slot4000_device = val;
-			ms.io[addr] = slot4000_device;
+			ms.slot4000_device = val;
+			ms.io[addr] = ms.slot4000_device;
 			break;
 
 		// set slot8000 page
 		case 0x07:
-			slot8000_page = val;
-			ms.io[addr] = slot8000_page;
+			ms.slot8000_page = val;
+			ms.io[addr] = ms.slot8000_page;
 			break;
 
 		// set slot8000 device
 		case 0x08:
-			slot8000_device = val;
-			ms.io[addr] = slot8000_device;
+			ms.slot8000_device = val;
+			ms.io[addr] = ms.slot8000_device;
 			break;
 
 		// check for hardware power off bit in P28
@@ -642,17 +618,17 @@ int Z80_Interrupt(void)
 		icount = 0;
 
 		// do time16 interrupt
-		if (ms.io[3] & 0x10 && !(interrupts_active & 0x10))
+		if (ms.io[3] & 0x10 && !(ms.interrupt_mask & 0x10))
 		{
-			interrupts_active |= 0x10;
+			ms.interrupt_mask |= 0x10;
 			return Z80_NMI_INT;
 		}
 	}
 
 	// Trigger keyboard interrupt if necessary (64hz)
-	if (ms.io[3] & 2 && !(interrupts_active & 2))
+	if (ms.io[3] & 2 && !(ms.interrupt_mask & 2))
 	{
-		interrupts_active |= 2;
+		ms.interrupt_mask |= 2;
 		return Z80_NMI_INT;
 	}
 
@@ -672,8 +648,8 @@ void resetMailstation()
 	// XXX: Mailstation normally retains RAM I believe.  But Mailstation OS
 	// won't warm-boot properly if we don't erase!  Not sure why yet.
 	memset(ms.ram,0,128 * 1024);
-	poweroff = 0;
-	interrupts_active = 0;
+	ms.power_state = MS_POWERSTATE_ON;
+	ms.interrupt_mask = 0;
 	Z80_Reset();
 }
 
@@ -684,7 +660,7 @@ void resetMailstation()
 //
 void powerOff()
 {
-	poweroff = 1;
+	ms.power_state = MS_POWERSTATE_OFF;
 
 	// clear LCD
 	memset(ms.lcd_dat8bit, 0, MS_LCD_WIDTH * MS_LCD_HEIGHT);
@@ -781,6 +757,18 @@ int main(int argc, char *argv[])
 	ms.lcd_dat8bit = (uint8_t *)calloc(  MS_LCD_WIDTH * MS_LCD_HEIGHT,
 	  sizeof(uint8_t));
 
+	/* Initialize flags. */
+	ms.lcd_lastupdate = 0;
+	ms.lcd_cas = 0;
+	ms.dataflash_updated = 0;
+	ms.interrupt_mask = 0;
+	ms.slot4000_page = 0;
+	ms.slot4000_device = 0;
+	ms.slot8000_page = 0;
+	ms.slot8000_device = 0;
+	ms.power_button = 0;
+	ms.power_state = MS_POWERSTATE_OFF;
+
 	/* Set up keyboard emulation array */
 	memset(ms.key_matrix, 0xff, sizeof(ms.key_matrix));
 
@@ -837,7 +825,7 @@ int main(int argc, char *argv[])
 		currenttick = SDL_GetTicks();
 
 		/* Let the Z80 process code at regular intervals */
-		if (!poweroff) {
+		if (ms.power_state == MS_POWERSTATE_ON) {
 			/* XXX: Can replace with SDL_TICKS_PASSED with new
 			 * SDL version.
 			 */
@@ -853,17 +841,22 @@ int main(int argc, char *argv[])
 		/* NOTE: Cursory glance suggests the screen updates 20ms after
 		 * the screen array changed.
 		 */
-		if (!poweroff && (lcd_lastupdate != 0) &&
-		  (currenttick - lcd_lastupdate >= 20)) {
+		if (ms.power_state == MS_POWERSTATE_ON && (ms.lcd_lastupdate != 0) &&
+		  (currenttick - ms.lcd_lastupdate >= 20)) {
 			ui_drawLCD();
-			lcd_lastupdate = 0;
+			ms.lcd_lastupdate = 0;
 		}
 
 		/* Write dataflash buffer to disk if it was modified */
-		if (dataflash_updated) {
-			buftoflash(ms.dataflash, dataflash_path, MEBIBYTE/2);
-			/* XXX: Check return value */
-			dataflash_updated = 0;
+		if (ms.dataflash_updated) {
+			int ret = buftoflash(ms.dataflash, dataflash_path, MEBIBYTE/2);
+			if (ret != 0) {
+				log_error(
+					"Failed writing dataflash to disk (%s), err 0x%08X\n",
+					dataflash_path, ret);
+			} else {
+				ms.dataflash_updated = 0;
+			}
 		}
 
 		/* XXX: All of this needs to be reworked to be far more
@@ -885,15 +878,15 @@ int main(int argc, char *argv[])
 			{
 				if (event.type == SDL_KEYDOWN)
 				{
-					power_button = 1;
-					if (poweroff)
+					ms.power_button = 1;
+					if (ms.power_state == MS_POWERSTATE_OFF)
 					{
 						printf("POWER ON\n");
 
 						resetMailstation();
 					}
 				} else {
-					power_button = 0;
+					ms.power_button = 0;
 				}
 			}
 
@@ -908,7 +901,7 @@ int main(int argc, char *argv[])
 						switch (event.key.keysym.sym) {
 						  /* Reset whole system */
 						  case SDLK_r:
-							if (!poweroff)
+							if (ms.power_state == MS_POWERSTATE_ON)
 							  resetMailstation();
 							break;
 						  default:
@@ -931,4 +924,3 @@ int main(int argc, char *argv[])
 
 	return 0;
 }
-
