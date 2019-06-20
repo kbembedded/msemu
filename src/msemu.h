@@ -29,6 +29,14 @@ struct mshw {
 	// whether the lcd should be redrawn.
 	uint32_t lcd_lastupdate;
 
+	// Bits specify which interrupts have been triggered (returned on P3)
+	uint8_t interrupt_mask;
+
+	// Stores the page/device numbers of the two middle 16KB slots of address space
+	uint8_t slot4000_page;
+	uint8_t slot4000_device;
+	uint8_t slot8000_page;
+	uint8_t slot8000_device;
 
 	uint8_t *codeflash;
 	uint8_t *dataflash;
