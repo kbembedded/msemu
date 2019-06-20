@@ -28,17 +28,8 @@ struct mshw ms;
 uint8_t LCD_fg_color = 3;  // LCD black
 uint8_t LCD_bg_color = 2;  // LCD green
 
-// Bits specify which interrupts have been triggered (returned on P3)
-uint8_t interrupts_active = 0;
-
 // This is set if hardware power off is detected (via P28), to halt emulation
 int poweroff = 0;
-
-// Stores the page/device numbers of the two middle 16KB slots of address space
-uint8_t slot4000_page = 0;
-uint8_t slot4000_device = 0;
-uint8_t slot8000_page = 0;
-uint8_t slot8000_device = 0;
 
 // Holds power button status (returned in P9.4)
 uint8_t power_button = 0;
@@ -202,16 +193,16 @@ unsigned Z80_RDMEM(dword A)
 	if (addr >= 0x4000 && addr < 0x8000)
 	{
 		newaddr = addr - 0x4000;
-		current_page = slot4000_page;
-		current_device = slot4000_device;
+		current_page = ms.slot4000_page;
+		current_device = ms.slot4000_device;
 	}
 
 	// Slot 0x8000
 	if (addr >= 0x8000 && addr < 0xC000)
 	{
 		newaddr = addr - 0x8000;
-		current_page = slot8000_page;
-		current_device = slot8000_device;
+		current_page = ms.slot8000_page;
+		current_device = ms.slot8000_device;
 	}
 
 	unsigned int translated_addr = newaddr + (current_page * 0x4000);
@@ -300,16 +291,16 @@ void Z80_WRMEM(dword A,uint8_t val)
 	if (addr >= 0x4000 && addr < 0x8000)
 	{
 		newaddr = addr - 0x4000;
-		current_page = slot4000_page;
-		current_device = slot4000_device;
+		current_page = ms.slot4000_page;
+		current_device = ms.slot4000_device;
 	}
 
 	// Slot 0x8000
 	if (addr >= 0x8000 && addr < 0xC000)
 	{
 		newaddr = addr - 0x8000;
-		current_page = slot8000_page;
-		current_device = slot8000_device;
+		current_page = ms.slot8000_page;
+		current_device = ms.slot8000_device;
 	}
 
 	translated_addr = newaddr + (current_page * 0x4000);
@@ -424,7 +415,7 @@ uint8_t Z80_In (uint8_t Port)
 				p3.1 = Keyboard handler
 				p3.2 = null
 			*/
-			return interrupts_active;
+			return ms.interrupt_mask;
 			break;
 
 		// page/device ports
@@ -516,32 +507,32 @@ void Z80_Out (uint8_t Port,uint8_t val)
 
 		// set interrupt masks
 		case 0x03:
-			interrupts_active &= val;
+			ms.interrupt_mask &= val;
 			ms.io[addr] = val;
 			break;
 
 		// set slot4000 page
 		case 0x05:
-			slot4000_page = val;
-			ms.io[addr] = slot4000_page;
+			ms.slot4000_page = val;
+			ms.io[addr] = ms.slot4000_page;
 			break;
 
 		// set slot4000 device
 		case 0x06:
-			slot4000_device = val;
-			ms.io[addr] = slot4000_device;
+			ms.slot4000_device = val;
+			ms.io[addr] = ms.slot4000_device;
 			break;
 
 		// set slot8000 page
 		case 0x07:
-			slot8000_page = val;
-			ms.io[addr] = slot8000_page;
+			ms.slot8000_page = val;
+			ms.io[addr] = ms.slot8000_page;
 			break;
 
 		// set slot8000 device
 		case 0x08:
-			slot8000_device = val;
-			ms.io[addr] = slot8000_device;
+			ms.slot8000_device = val;
+			ms.io[addr] = ms.slot8000_device;
 			break;
 
 		// check for hardware power off bit in P28
@@ -633,17 +624,17 @@ int Z80_Interrupt(void)
 		icount = 0;
 
 		// do time16 interrupt
-		if (ms.io[3] & 0x10 && !(interrupts_active & 0x10))
+		if (ms.io[3] & 0x10 && !(ms.interrupt_mask & 0x10))
 		{
-			interrupts_active |= 0x10;
+			ms.interrupt_mask |= 0x10;
 			return Z80_NMI_INT;
 		}
 	}
 
 	// Trigger keyboard interrupt if necessary (64hz)
-	if (ms.io[3] & 2 && !(interrupts_active & 2))
+	if (ms.io[3] & 2 && !(ms.interrupt_mask & 2))
 	{
-		interrupts_active |= 2;
+		ms.interrupt_mask |= 2;
 		return Z80_NMI_INT;
 	}
 
@@ -664,7 +655,7 @@ void resetMailstation()
 	// won't warm-boot properly if we don't erase!  Not sure why yet.
 	memset(ms.ram,0,128 * 1024);
 	poweroff = 0;
-	interrupts_active = 0;
+	ms.interrupt_mask = 0;
 	Z80_Reset();
 }
 
@@ -776,6 +767,11 @@ int main(int argc, char *argv[])
 	ms.lcd_lastupdate = 0;
 	ms.lcd_cas = 0;
 	ms.dataflash_updated = 0;
+	ms.interrupt_mask = 0;
+	ms.slot4000_page = 0;
+	ms.slot4000_device = 0;
+	ms.slot8000_page = 0;
+	ms.slot8000_device = 0;
 
 	/* Set up keyboard emulation array */
 	memset(ms.key_matrix, 0xff, sizeof(ms.key_matrix));
