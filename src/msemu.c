@@ -767,6 +767,7 @@ int main(int argc, char *argv[])
 	ms.slot8000_page = 0;
 	ms.slot8000_device = 0;
 	ms.power_button = 0;
+	ms.power_state = MS_POWERSTATE_OFF;
 
 	/* Set up keyboard emulation array */
 	memset(ms.key_matrix, 0xff, sizeof(ms.key_matrix));
