@@ -14,6 +14,10 @@
 #define MS_LCD_LEFT 	1
 #define MS_LCD_RIGHT 	2
 
+// Power state constants
+#define MS_POWERSTATE_ON  1
+#define MS_POWERSTATE_OFF 0
+
 struct mshw {
 	uint8_t *ram;
 	uint8_t *io;
@@ -49,6 +53,9 @@ struct mshw {
 
 	// Holds power button status (returned in P9.4)
 	uint8_t power_button;
+
+	// Holds current power state (on or off)
+	uint8_t power_state;
 };
 
 #endif // __MSEMU_H_
