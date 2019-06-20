@@ -32,6 +32,11 @@ struct mshw {
 
 	uint8_t *codeflash;
 	uint8_t *dataflash;
+
+	// Signals if the dataflash contents have been changed.
+	// Should be cleared once dataflash is written back to disk.
+	uint8_t dataflash_updated;
+
 	uint8_t key_matrix[10];
 };
 

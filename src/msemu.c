@@ -31,9 +31,6 @@ uint8_t LCD_bg_color = 2;  // LCD green
 // Bits specify which interrupts have been triggered (returned on P3)
 uint8_t interrupts_active = 0;
 
-// This is set if the dataflash contents are changed, so that we can write the contents to file.
-int8_t dataflash_updated = 0;
-
 // This is set if hardware power off is detected (via P28), to halt emulation
 int poweroff = 0;
 
@@ -345,7 +342,7 @@ void Z80_WRMEM(dword A,uint8_t val)
 			log_error("[%04X] * INVALID DATAFLASH PAGE: %d\n",
 			  Z80_GetPC(), current_page);
 		}
-		dataflash_updated = writeDataflash(translated_addr, val);
+		ms.dataflash_updated = writeDataflash(translated_addr, val);
 		break;
 
 	  case 4: /* LCD, right side */
@@ -859,10 +856,15 @@ int main(int argc, char *argv[])
 		}
 
 		/* Write dataflash buffer to disk if it was modified */
-		if (dataflash_updated) {
-			buftoflash(ms.dataflash, dataflash_path, MEBIBYTE/2);
-			/* XXX: Check return value */
-			dataflash_updated = 0;
+		if (ms.dataflash_updated) {
+			int ret = buftoflash(ms.dataflash, dataflash_path, MEBIBYTE/2);
+			if (ret != 0) {
+				log_error(
+					"Failed writing dataflash to disk (%s), err 0x%08X\n",
+					dataflash_path, ret);
+			} else {
+				ms.dataflash_updated = 0;
+			}
 		}
 
 		/* XXX: All of this needs to be reworked to be far more
