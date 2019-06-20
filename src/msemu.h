@@ -17,9 +17,19 @@
 struct mshw {
 	uint8_t *ram;
 	uint8_t *io;
+
 	uint8_t *lcd_dat8bit;
 	/* TODO: Might be able to remove this 1bit screen representation */
 	uint8_t *lcd_dat1bit;
+
+	// Stores current LCD column.
+	uint8_t lcd_cas;
+
+	// timestamp of last lcd draw, used to decide
+	// whether the lcd should be redrawn.
+	uint32_t lcd_lastupdate;
+
+
 	uint8_t *codeflash;
 	uint8_t *dataflash;
 	uint8_t key_matrix[10];

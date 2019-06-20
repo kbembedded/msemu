@@ -24,12 +24,6 @@
 
 struct mshw ms;
 
-// Stores current Mailstation LCD column
-uint8_t lcd_cas = 0;
-
-// Last SDL tick at which LCD was updated.  Used for timing LCD refreshes to screen.
-uint32_t lcd_lastupdate = 0;
-
 // Default entry of color palette to draw Mailstation LCD with
 uint8_t LCD_fg_color = 3;  // LCD black
 uint8_t LCD_bg_color = 2;  // LCD green
@@ -105,7 +99,7 @@ void writeLCD(uint16_t newaddr, uint8_t val, int lcdnum)
 	{
 		// Write data to currently selected LCD column.
 		// This is just used for reading back LCD contents to the Mailstation quickly.
-		lcd_ptr[newaddr + (lcd_cas * 240)] = val;
+		lcd_ptr[newaddr + (ms.lcd_cas * 240)] = val;
 
 
 		/*
@@ -114,7 +108,7 @@ void writeLCD(uint16_t newaddr, uint8_t val, int lcdnum)
 		*/
 
 		// Reverse column # (MS col #0 starts on right side)
-		int x = 19 - lcd_cas;
+		int x = 19 - ms.lcd_cas;
 		// Use right half if necessary
 		if (lcdnum == MS_LCD_RIGHT) x += 20;
 
@@ -126,11 +120,11 @@ void writeLCD(uint16_t newaddr, uint8_t val, int lcdnum)
 		}
 
 		// Let main loop know to update screen with new LCD data
-		lcd_lastupdate = SDL_GetTicks();
+		ms.lcd_lastupdate = SDL_GetTicks();
 	}
 
 	// If CAS line is low, set current column instead
-	else	lcd_cas = val;
+	else	ms.lcd_cas = val;
 
 }
 
@@ -154,11 +148,11 @@ uint8_t readLCD(uint16_t newaddr, int lcdnum)
 	if (ms.io[2] & 8)
 	{
 		// Return data on currently selected LCD column
-		return lcd_ptr[newaddr + (lcd_cas * 240)];
+		return lcd_ptr[newaddr + (ms.lcd_cas * 240)];
 	}
 
 	// Not sure what this normally returns when CAS bit low!
-	else return lcd_cas;
+	else return ms.lcd_cas;
 
 }
 
@@ -781,6 +775,11 @@ int main(int argc, char *argv[])
 	ms.lcd_dat8bit = (uint8_t *)calloc(  MS_LCD_WIDTH * MS_LCD_HEIGHT,
 	  sizeof(uint8_t));
 
+	/* Initialize flags. */
+	ms.lcd_lastupdate = 0;
+	ms.lcd_cas = 0;
+	ms.dataflash_updated = 0;
+
 	/* Set up keyboard emulation array */
 	memset(ms.key_matrix, 0xff, sizeof(ms.key_matrix));
 
@@ -853,10 +852,10 @@ int main(int argc, char *argv[])
 		/* NOTE: Cursory glance suggests the screen updates 20ms after
 		 * the screen array changed.
 		 */
-		if (!poweroff && (lcd_lastupdate != 0) &&
-		  (currenttick - lcd_lastupdate >= 20)) {
+		if (!poweroff && (ms.lcd_lastupdate != 0) &&
+		  (currenttick - ms.lcd_lastupdate >= 20)) {
 			ui_drawLCD();
-			lcd_lastupdate = 0;
+			ms.lcd_lastupdate = 0;
 		}
 
 		/* Write dataflash buffer to disk if it was modified */
@@ -931,4 +930,3 @@ int main(int argc, char *argv[])
 
 	return 0;
 }
-
