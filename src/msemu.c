@@ -28,9 +28,6 @@ struct mshw ms;
 uint8_t LCD_fg_color = 3;  // LCD black
 uint8_t LCD_bg_color = 2;  // LCD green
 
-// This is set if hardware power off is detected (via P28), to halt emulation
-int poweroff = 0;
-
 // This table translates PC scancodes to the Mailstation key matrix
 int32_t keyTranslateTable[10][8] = {
 	{ SDLK_HOME, SDLK_END, 0, SDLK_F1, SDLK_F2, SDLK_F3, SDLK_F4, SDLK_F5 },
@@ -651,7 +648,7 @@ void resetMailstation()
 	// XXX: Mailstation normally retains RAM I believe.  But Mailstation OS
 	// won't warm-boot properly if we don't erase!  Not sure why yet.
 	memset(ms.ram,0,128 * 1024);
-	poweroff = 0;
+	ms.power_state = MS_POWERSTATE_ON;
 	ms.interrupt_mask = 0;
 	Z80_Reset();
 }
@@ -663,7 +660,7 @@ void resetMailstation()
 //
 void powerOff()
 {
-	poweroff = 1;
+	ms.power_state = MS_POWERSTATE_OFF;
 
 	// clear LCD
 	memset(ms.lcd_dat8bit, 0, MS_LCD_WIDTH * MS_LCD_HEIGHT);
@@ -827,7 +824,7 @@ int main(int argc, char *argv[])
 		currenttick = SDL_GetTicks();
 
 		/* Let the Z80 process code at regular intervals */
-		if (!poweroff) {
+		if (ms.power_state == MS_POWERSTATE_ON) {
 			/* XXX: Can replace with SDL_TICKS_PASSED with new
 			 * SDL version.
 			 */
@@ -843,7 +840,7 @@ int main(int argc, char *argv[])
 		/* NOTE: Cursory glance suggests the screen updates 20ms after
 		 * the screen array changed.
 		 */
-		if (!poweroff && (ms.lcd_lastupdate != 0) &&
+		if (ms.power_state == MS_POWERSTATE_ON && (ms.lcd_lastupdate != 0) &&
 		  (currenttick - ms.lcd_lastupdate >= 20)) {
 			ui_drawLCD();
 			ms.lcd_lastupdate = 0;
@@ -881,7 +878,7 @@ int main(int argc, char *argv[])
 				if (event.type == SDL_KEYDOWN)
 				{
 					ms.power_button = 1;
-					if (poweroff)
+					if (ms.power_state == MS_POWERSTATE_OFF)
 					{
 						printf("POWER ON\n");
 
@@ -903,7 +900,7 @@ int main(int argc, char *argv[])
 						switch (event.key.keysym.sym) {
 						  /* Reset whole system */
 						  case SDLK_r:
-							if (!poweroff)
+							if (ms.power_state == MS_POWERSTATE_ON)
 							  resetMailstation();
 							break;
 						  default:
