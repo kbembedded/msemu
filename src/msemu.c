@@ -31,9 +31,6 @@ uint8_t LCD_bg_color = 2;  // LCD green
 // This is set if hardware power off is detected (via P28), to halt emulation
 int poweroff = 0;
 
-// Holds power button status (returned in P9.4)
-uint8_t power_button = 0;
-
 // This table translates PC scancodes to the Mailstation key matrix
 int32_t keyTranslateTable[10][8] = {
 	{ SDLK_HOME, SDLK_END, 0, SDLK_F1, SDLK_F2, SDLK_F3, SDLK_F4, SDLK_F5 },
@@ -428,7 +425,7 @@ uint8_t Z80_In (uint8_t Port)
 
 		// acknowledge power good + power button status
 		case 0x09:
-			return (uint8_t)0xE0 | ((power_button & 1) << 4);
+			return (uint8_t)0xE0 | ((ms.power_button & 1) << 4);
 
 
 		// These are all for the RTC
@@ -772,6 +769,7 @@ int main(int argc, char *argv[])
 	ms.slot4000_device = 0;
 	ms.slot8000_page = 0;
 	ms.slot8000_device = 0;
+	ms.power_button = 0;
 
 	/* Set up keyboard emulation array */
 	memset(ms.key_matrix, 0xff, sizeof(ms.key_matrix));
@@ -882,7 +880,7 @@ int main(int argc, char *argv[])
 			{
 				if (event.type == SDL_KEYDOWN)
 				{
-					power_button = 1;
+					ms.power_button = 1;
 					if (poweroff)
 					{
 						printf("POWER ON\n");
@@ -890,7 +888,7 @@ int main(int argc, char *argv[])
 						resetMailstation();
 					}
 				} else {
-					power_button = 0;
+					ms.power_button = 0;
 				}
 			}
 

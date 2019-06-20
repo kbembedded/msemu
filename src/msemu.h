@@ -46,6 +46,9 @@ struct mshw {
 	uint8_t dataflash_updated;
 
 	uint8_t key_matrix[10];
+
+	// Holds power button status (returned in P9.4)
+	uint8_t power_button;
 };
 
 #endif // __MSEMU_H_
