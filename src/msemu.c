@@ -829,6 +829,18 @@ int main(int argc, char *argv[])
 			/* XXX: Can replace with SDL_TICKS_PASSED with new
 			 * SDL version.
 			 */
+			/* NOTE: The point of this is to effectively match
+			 * execution speed with realtime. Normally, the MS
+			 * sees an interrupt every 64 Hz, this handles keyboard
+			 * reading as well as incrementing timers.
+			 * With a 64 Hz interrupt, this means an interrupt
+			 * occurs every 15 ms. The z80em tool just goes as
+			 * fast as it can, there is no (known) way to spec how
+			 * long in real time a single T-State should take.
+			 * The workaround for this, is to delay execution for
+			 * 15 SDL ticks, or 15 ms, every interrupt period to
+			 * get roughly time accurate execution.
+			 */
 			execute_counter += currenttick - lasttick;
 			if (execute_counter > 15) {
 				execute_counter = 0;
