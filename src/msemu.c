@@ -640,9 +640,9 @@ Z80EX_BYTE z80ex_intread (
 	abort();
 }
 
-// Handler fired when Z80_ICount hits 0
-// TODO: Actually use cpu/user_data instead of globals.
-void process_interrupts ()
+// Processes interrupts. Should be called on every interrupt period.
+// Returns number of tstates spent processing interrupt.
+int process_interrupts ()
 {
 	static int icount = 0;
 
@@ -655,7 +655,7 @@ void process_interrupts ()
 		if (ms.io[3] & 0x10 && !(ms.interrupt_mask & 0x10))
 		{
 			ms.interrupt_mask |= 0x10;
-			z80ex_nmi(ms.z80);
+			return z80ex_nmi(ms.z80);
 		}
 	}
 
@@ -663,11 +663,11 @@ void process_interrupts ()
 	if (ms.io[3] & 2 && !(ms.interrupt_mask & 2))
 	{
 		ms.interrupt_mask |= 2;
-		z80ex_nmi(ms.z80);
+		return z80ex_nmi(ms.z80);
 	}
 
 	// Otherwise ignore this
-	return;
+	return 0;
 }
 
 // Handler for returning the byte for a given address.
@@ -909,7 +909,10 @@ int main(int argc, char *argv[])
 			 */
 			execute_counter += currenttick - lasttick;
 
-			while (tstate_counter < interrupt_period){
+			// The op code check is to verify we're not in the middle of
+			// processing a prefix opcode. We need to completely process
+			// these instructions before handling interrupts.
+			while (tstate_counter < interrupt_period || z80ex_last_op_type(ms.z80)){
 				if (!silent){
 					memset(&dasm_buffer, 0, dasm_buffer_len);
 					log_debug("[%04X] - ", z80ex_get_reg(ms.z80, regPC));
@@ -930,7 +933,7 @@ int main(int argc, char *argv[])
 				tstate_counter += z80ex_step(ms.z80);
 			}
 
-			process_interrupts();
+			tstate_counter += process_interrupts();
 			tstate_counter %= interrupt_period;
 		}
 
