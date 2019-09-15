@@ -370,14 +370,16 @@ Z80EX_BYTE z80ex_pread (
 	Z80EX_WORD port,
 	void *user_data)
 {
-	uint16_t addr = port;
+	// We need to mask off the upper byte here because
+	// z80ex can't process the port number properly otherwise.
+	uint16_t addr = port & 0x00FF;
 
 	// This is for the RTC on P10-1C
 	time_t theTime;
 	time( &theTime );
 	struct tm *rtc_time = localtime(&theTime);
 
-	log_debug("[%04X] * IO  [%04X] -> %02X\n", z80ex_get_reg(ms.z80, regPC), addr,ms.io[addr]);
+	log_debug(" * IO  READ  [  %02X] -> %02X\n", addr, ms.io[addr]);
 
 	//if (addr < 5 || addr > 8) printf("* IO <- %04X - %02X\n",addr,ms.io[addr]);
 
@@ -491,10 +493,12 @@ void z80ex_pwrite (
 	Z80EX_BYTE val,
 	void *user_data)
 {
-	uint16_t addr = port;
+	// We need to mask off the upper byte here because
+	// z80ex can't process the port number properly otherwise.
+	uint16_t addr = port & 0x00FF;
 	static uint8_t tmp_reg;
 
-	log_debug("[%04X] * IO  [%04X] <- %02X\n",z80ex_get_reg(ms.z80, regPC), addr, val);
+	log_debug(" * IO  WRITE [  %02X] <- %02X\n", addr, val);
 
 	//if (addr < 5 || addr > 8) printf("* IO -> %04X - %02X\n",addr, val);
 
@@ -904,27 +908,23 @@ int main(int argc, char *argv[])
 			 * get roughly time accurate execution.
 			 */
 			execute_counter += currenttick - lasttick;
-			if (execute_counter > 15) {
-				execute_counter = 0;
 
-				memset(&dasm_buffer, 0, dasm_buffer_len);
-
-				log_debug("[%04X] - ", z80ex_get_reg(ms.z80, regPC));
-				z80ex_dasm(
-					&dasm_buffer[0], dasm_buffer_len,
-					0,
-					&dasm_tstates, &dasm_tstates2,
-					z80ex_dasm_readbyte,
-					z80ex_get_reg(ms.z80, regPC),
-					0);
-				log_debug("%-15s  t=%d", dasm_buffer, dasm_tstates);
-				if(dasm_tstates2) {
-					log_debug("/%d", dasm_tstates2);
-				}
-				log_debug("\n");
-
-				z80ex_step(ms.z80);
+			memset(&dasm_buffer, 0, dasm_buffer_len);
+			log_debug("[%04X] - ", z80ex_get_reg(ms.z80, regPC));
+			z80ex_dasm(
+				&dasm_buffer[0], dasm_buffer_len,
+				0,
+				&dasm_tstates, &dasm_tstates2,
+				z80ex_dasm_readbyte,
+				z80ex_get_reg(ms.z80, regPC),
+				0);
+			log_debug("%-15s  t=%d", dasm_buffer, dasm_tstates);
+			if(dasm_tstates2) {
+				log_debug("/%d", dasm_tstates2);
 			}
+			log_debug("\n");
+
+			z80ex_step(ms.z80);
 		}
 
 		/* Update LCD if modified (at 20ms rate) */
