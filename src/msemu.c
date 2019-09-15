@@ -917,20 +917,22 @@ int main(int argc, char *argv[])
 			 */
 			execute_counter += currenttick - lasttick;
 
-			memset(&dasm_buffer, 0, dasm_buffer_len);
-			log_debug("[%04X] - ", z80ex_get_reg(ms.z80, regPC));
-			z80ex_dasm(
-				&dasm_buffer[0], dasm_buffer_len,
-				0,
-				&dasm_tstates, &dasm_tstates2,
-				z80ex_dasm_readbyte,
-				z80ex_get_reg(ms.z80, regPC),
-				0);
-			log_debug("%-15s  t=%d", dasm_buffer, dasm_tstates);
-			if(dasm_tstates2) {
-				log_debug("/%d", dasm_tstates2);
+			if (!silent){
+				memset(&dasm_buffer, 0, dasm_buffer_len);
+				log_debug("[%04X] - ", z80ex_get_reg(ms.z80, regPC));
+				z80ex_dasm(
+					&dasm_buffer[0], dasm_buffer_len,
+					0,
+					&dasm_tstates, &dasm_tstates2,
+					z80ex_dasm_readbyte,
+					z80ex_get_reg(ms.z80, regPC),
+					0);
+				log_debug("%-15s  t=%d", dasm_buffer, dasm_tstates);
+				if(dasm_tstates2) {
+					log_debug("/%d", dasm_tstates2);
+				}
+				log_debug("\n");
 			}
-			log_debug("\n");
 
 			tstate_counter += z80ex_step(ms.z80);
 			if (tstate_counter > interrupt_period) {
