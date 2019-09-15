@@ -4,8 +4,6 @@
 #include "logger.h"
 #include <z80ex/z80ex.h>
 
-extern struct mshw ms;
-
 /* Return a byte from codeflash buffer
  *
  * TODO:
@@ -13,9 +11,9 @@ extern struct mshw ms;
  *   Add debug hook
  *   Ensure this is used in multiple places when reading from codeflash
  */
-inline uint8_t readCodeFlash(uint32_t translated_addr)
+inline uint8_t readCodeFlash(MSHW* ms, uint32_t translated_addr)
 {
-	uint8_t val = ms.codeflash[translated_addr];
+	uint8_t val = ms->codeflash[translated_addr];
 	log_debug(" * CF  READ  [%04X] -> %02X\n",
 		translated_addr, val);
 	return val;
@@ -26,7 +24,7 @@ inline uint8_t readCodeFlash(uint32_t translated_addr)
  * TODO:
  *   Implement writing to codeflash
  */
-inline void writeCodeFlash(uint32_t translated_addr)
+inline void writeCodeFlash(MSHW* ms, uint32_t translated_addr)
 {
 	return;
 }
@@ -38,9 +36,9 @@ inline void writeCodeFlash(uint32_t translated_addr)
  *
  * TODO: Add debugging potential here
  */
-inline uint8_t readDataflash(unsigned int translated_addr)
+inline uint8_t readDataflash(MSHW* ms, unsigned int translated_addr)
 {
-	uint8_t val = ms.dataflash[translated_addr];
+	uint8_t val = ms->dataflash[translated_addr];
 	log_debug(" * DF  READ  [%04X] -> %02X\n",
 		translated_addr, val);
 	return val;
@@ -59,7 +57,7 @@ inline uint8_t readDataflash(unsigned int translated_addr)
  *
  * TODO: Add debugging hook here.
  */
-int8_t writeDataflash(unsigned int translated_addr, uint8_t val)
+int8_t writeDataflash(MSHW* ms, unsigned int translated_addr, uint8_t val)
 {
 	static uint8_t cycle;
 	static uint8_t cmd;
@@ -87,18 +85,18 @@ int8_t writeDataflash(unsigned int translated_addr, uint8_t val)
 			if (val != 0xD0) break;
 			translated_addr &= 0xFFFFFF00;
 			log_debug(" * DF  Sector-Erase: 0x%X\n", translated_addr);
-			memset(&ms.dataflash[translated_addr], 0xFF, 0x100);
+			memset(&ms->dataflash[translated_addr], 0xFF, 0x100);
 			modified = 1;
 			break;
 		  case 0x10: /* Byte program */
 			log_debug(" * DF  WRITE [%04X] <- %02X\n", translated_addr,val);
-			ms.dataflash[translated_addr] = val;
+			ms->dataflash[translated_addr] = val;
 			modified = 1;
 			break;
 		  case 0x30: /* Chip erase, execute cmd is 0x30 */
 			if (val != 0x30) break;
 			log_debug(" * DF  Chip erase\n");
-			memset(ms.dataflash, 0xFF, MEBIBYTE/2);
+			memset(ms->dataflash, 0xFF, MEBIBYTE/2);
 			modified = 1;
 			break;
 		  case 0x90: /* Read ID */
