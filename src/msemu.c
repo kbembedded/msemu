@@ -909,7 +909,7 @@ int main(int argc, char *argv[])
 
 				memset(&dasm_buffer, 0, dasm_buffer_len);
 
-				printf("[%04X] - ", z80ex_get_reg(ms.z80, regPC));
+				log_debug("[%04X] - ", z80ex_get_reg(ms.z80, regPC));
 				z80ex_dasm(
 					&dasm_buffer[0], dasm_buffer_len,
 					0,
@@ -917,11 +917,11 @@ int main(int argc, char *argv[])
 					z80ex_dasm_readbyte,
 					z80ex_get_reg(ms.z80, regPC),
 					0);
-				printf("%-15s  t=%d", dasm_buffer, dasm_tstates);
+				log_debug("%-15s  t=%d", dasm_buffer, dasm_tstates);
 				if(dasm_tstates2) {
-					printf("/%d", dasm_tstates2);
+					log_debug("/%d", dasm_tstates2);
 				}
-				printf("\n");
+				log_debug("\n");
 
 				z80ex_step(ms.z80);
 			}
