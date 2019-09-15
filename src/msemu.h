@@ -19,7 +19,7 @@
 #define MS_POWERSTATE_ON  1
 #define MS_POWERSTATE_OFF 0
 
-struct mshw {
+typedef struct mshw {
 	Z80EX_CONTEXT* z80;
 	uint8_t *ram;
 	uint8_t *io;
@@ -58,6 +58,6 @@ struct mshw {
 
 	// Holds current power state (on or off)
 	uint8_t power_state;
-};
+} MSHW;
 
 #endif // __MSEMU_H_

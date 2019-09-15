@@ -186,7 +186,7 @@ Z80EX_BYTE z80ex_mread(
 
 
 	// Slot 0x0000 - always codeflash page 0
-	if (addr < 0x4000) return readCodeFlash(addr);
+	if (addr < 0x4000) return readCodeFlash(&ms, addr);
 
 	// Slot 0xC000 - always RAM page 0
 	if (addr >= 0xC000) return readRAM(addr-0xC000);
@@ -219,7 +219,7 @@ Z80EX_BYTE z80ex_mread(
 			log_error("[%04X] * INVALID CODEFLASH PAGE: %d\n",
 			  z80ex_get_reg(ms.z80, regPC),current_page);
 		}
-		return readCodeFlash(translated_addr);
+		return readCodeFlash(&ms, translated_addr);
 
 	  case 1: /* Dataflash */
 		if (current_page >= 8) {
@@ -235,7 +235,7 @@ Z80EX_BYTE z80ex_mread(
 			log_error("[%04X] * INVALID DATAFLASH PAGE: %d\n",
 			  z80ex_get_reg(ms.z80, regPC), current_page);
 		}
-		return readDataflash(translated_addr);
+		return readDataflash(&ms, translated_addr);
 
 	  case 4: /* LCD, right side */
 		return readLCD(newaddr, MS_LCD_RIGHT);
@@ -339,7 +339,7 @@ void z80ex_mwrite(
 			log_error("[%04X] * INVALID DATAFLASH PAGE: %d\n",
 			  z80ex_get_reg(ms.z80, regPC), current_page);
 		}
-		ms.dataflash_updated = writeDataflash(translated_addr, val);
+		ms.dataflash_updated = writeDataflash(&ms, translated_addr, val);
 		break;
 
 	  case 4: /* LCD, right side */
