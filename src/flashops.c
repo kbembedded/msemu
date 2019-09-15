@@ -1,6 +1,8 @@
-#include "msemu.h"
 #include "flashops.h"
+
+#include "msemu.h"
 #include "logger.h"
+#include <z80ex/z80ex.h>
 
 extern struct mshw ms;
 
@@ -13,7 +15,10 @@ extern struct mshw ms;
  */
 inline uint8_t readCodeFlash(uint32_t translated_addr)
 {
-	return ms.codeflash[translated_addr];
+	uint8_t val = ms.codeflash[translated_addr];
+	log_debug(" * CF  READ  [%04X] -> %02X\n",
+		translated_addr, val);
+	return val;
 }
 
 /* Write a byte to codeflash buffer
@@ -33,9 +38,12 @@ inline void writeCodeFlash(uint32_t translated_addr)
  *
  * TODO: Add debugging potential here
  */
-inline byte readDataflash(unsigned int translated_addr)
+inline uint8_t readDataflash(unsigned int translated_addr)
 {
-	return ms.dataflash[translated_addr];
+	uint8_t val = ms.dataflash[translated_addr];
+	log_debug(" * DF  READ  [%04X] -> %02X\n",
+		translated_addr, val);
+	return val;
 }
 
 
@@ -51,7 +59,7 @@ inline byte readDataflash(unsigned int translated_addr)
  *
  * TODO: Add debugging hook here.
  */
-int8_t writeDataflash(unsigned int translated_addr, byte val)
+int8_t writeDataflash(unsigned int translated_addr, uint8_t val)
 {
 	static uint8_t cycle;
 	static uint8_t cmd;
@@ -60,13 +68,13 @@ int8_t writeDataflash(unsigned int translated_addr, byte val)
 	if (!cycle) {
 		switch (val) {
 		  case 0xFF: /* Reset dataflash, single cycle */
-			log_debug("[%04X] * Dataflash Reset\n", Z80_GetPC());
+			log_debug(" * DF  Reset\n");
 			break;
 		  case 0x00: /* Not sure what cmd is, but only one cycle? */
-			log_debug("[%04X] * Dataflash cmd 0x00\n", Z80_GetPC());
+			log_debug(" * DF  cmd 0x00\n");
 			break;
 		  case 0xC3: /* Not sure what cmd is, but only one cycle? */
-			log_debug("[%04X] * Dataflash cmd 0xC3\n", Z80_GetPC());
+			log_debug(" * DF  cmd 0xC3\n");
 			break;
 		  default:
 			cmd = val;
@@ -78,30 +86,27 @@ int8_t writeDataflash(unsigned int translated_addr, byte val)
 		  case 0x20: /* Sector erase, execute cmd is 0xD0 */
 			if (val != 0xD0) break;
 			translated_addr &= 0xFFFFFF00;
-			log_debug("[%04X] * Dataflash Sector-Erase: 0x%X\n",
-			  Z80_GetPC(), translated_addr);
+			log_debug(" * DF  Sector-Erase: 0x%X\n", translated_addr);
 			memset(&ms.dataflash[translated_addr], 0xFF, 0x100);
 			modified = 1;
 			break;
 		  case 0x10: /* Byte program */
-			log_debug("[%04X] * Dataflash Byte-Prog: 0x%X = %02X\n",
-			  Z80_GetPC(),translated_addr,val);
+			log_debug(" * DF  WRITE [%04X] <- %02X\n", translated_addr,val);
 			ms.dataflash[translated_addr] = val;
 			modified = 1;
 			break;
 		  case 0x30: /* Chip erase, execute cmd is 0x30 */
 			if (val != 0x30) break;
-			log_debug("[%04X] * Dataflash Chip erase\n");
+			log_debug(" * DF  Chip erase\n");
 			memset(ms.dataflash, 0xFF, MEBIBYTE/2);
 			modified = 1;
 			break;
 		  case 0x90: /* Read ID */
-			log_debug("[%04X] * Dataflash Read ID\n", Z80_GetPC());
+			log_debug(" * DF  Read ID\n");
 			break;
 		  default:
 			log_error(
-			  "[%04X] * INVALID DATAFLASH CMD SEQ: %02X %02X\n",
-			  Z80_GetPC(), cmd, val);
+			  " * DF  INVALID CMD SEQ: %02X %02X\n", cmd, val);
 			break;
 		}
 		cycle = 0;

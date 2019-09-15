@@ -3,6 +3,7 @@
 
 #include <string.h>
 #include <stdint.h>
+#include <z80ex/z80ex.h>
 
 #define	MEBIBYTE	0x100000
 
@@ -19,6 +20,7 @@
 #define MS_POWERSTATE_OFF 0
 
 struct mshw {
+	Z80EX_CONTEXT* z80;
 	uint8_t *ram;
 	uint8_t *io;
 
