@@ -632,11 +632,17 @@ void z80ex_reti (
 // 	return;
 // }
 
-// Handler fired when Z80_ICount hits 0
-// TODO: Actually use cpu/user_data instead of globals.
 Z80EX_BYTE z80ex_intread (
 	Z80EX_CONTEXT *cpu,
 	void *user_data)
+{
+	log_error("z80ex_intread is not implemented.");
+	abort();
+}
+
+// Handler fired when Z80_ICount hits 0
+// TODO: Actually use cpu/user_data instead of globals.
+void process_interrupts ()
 {
 	static int icount = 0;
 
@@ -649,7 +655,7 @@ Z80EX_BYTE z80ex_intread (
 		if (ms.io[3] & 0x10 && !(ms.interrupt_mask & 0x10))
 		{
 			ms.interrupt_mask |= 0x10;
-			return -2; //Z80_NMI_INT;
+			z80ex_nmi(ms.z80);
 		}
 	}
 
@@ -657,11 +663,11 @@ Z80EX_BYTE z80ex_intread (
 	if (ms.io[3] & 2 && !(ms.interrupt_mask & 2))
 	{
 		ms.interrupt_mask |= 2;
-		return -2; //Z80_NMI_INT;
+		z80ex_nmi(ms.z80);
 	}
 
 	// Otherwise ignore this
-	return -1; //Z80_IGNORE_INT;
+	return;
 }
 
 // Handler for returning the byte for a given address.
@@ -731,6 +737,8 @@ int main(int argc, char *argv[])
 	int c;
 	int silent = 1;
 	int execute_counter = 0;
+	int tstate_counter = 0;
+	int interrupt_period = 187500;
 	int exitemu = 0;
 	uint32_t lasttick = SDL_GetTicks();
 	uint32_t currenttick;
@@ -924,7 +932,11 @@ int main(int argc, char *argv[])
 			}
 			log_debug("\n");
 
-			z80ex_step(ms.z80);
+			tstate_counter += z80ex_step(ms.z80);
+			if (tstate_counter > interrupt_period) {
+				process_interrupts();
+				tstate_counter %= interrupt_period;
+			}
 		}
 
 		/* Update LCD if modified (at 20ms rate) */
