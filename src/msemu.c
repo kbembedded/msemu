@@ -21,6 +21,7 @@
 #include <SDL/SDL.h>
 #include <SDL/SDL_rotozoom.h>
 #include <z80ex/z80ex.h>
+#include <z80ex/z80ex_dasm.h>
 
 struct mshw ms;
 
@@ -146,8 +147,7 @@ uint8_t readLCD(uint16_t newaddr, int lcdnum)
 uint8_t readRAM(unsigned int translated_addr)
 {
 	uint8_t val = ms.ram[translated_addr];
-	log_debug("[%04X] * RAM [%04X] -> %02X\n",
-			  z80ex_get_reg(ms.z80, regPC), translated_addr, val);
+	log_debug(" * RAM READ  [%04X] -> %02X\n", translated_addr, val);
 	return val;
 }
 
@@ -157,8 +157,7 @@ uint8_t readRAM(unsigned int translated_addr)
  */
 void writeRAM(unsigned int translated_addr, uint8_t val)
 {
-	log_debug("[%04X] * RAM [%04X] <- %02X\n",
-			  z80ex_get_reg(ms.z80, regPC), translated_addr, val);
+	log_debug(" * RAM WRITE [%04X] <- %02X\n", translated_addr, val);
 	ms.ram[translated_addr] = val;
 }
 
@@ -661,6 +660,14 @@ Z80EX_BYTE z80ex_intread (
 	return -1; //Z80_IGNORE_INT;
 }
 
+// Handler for returning the byte for a given address.
+// Used by the disassembler.
+Z80EX_BYTE z80ex_dasm_readbyte (
+	Z80EX_WORD addr,
+	void *user_data
+) {
+	return ms.codeflash[addr];
+}
 
 //----------------------------------------------------------------------------
 //
@@ -724,6 +731,12 @@ int main(int argc, char *argv[])
 	uint32_t lasttick = SDL_GetTicks();
 	uint32_t currenttick;
 	SDL_Event event;
+
+	// These are for the disassembler
+	int dasm_buffer_len = 256;
+	char dasm_buffer[dasm_buffer_len];
+	int dasm_tstates = 0;
+	int dasm_tstates2 = 0;
 
 	static struct option long_opts[] = {
 	  { "help", no_argument, NULL, 'h' },
@@ -893,6 +906,23 @@ int main(int argc, char *argv[])
 			execute_counter += currenttick - lasttick;
 			if (execute_counter > 15) {
 				execute_counter = 0;
+
+				memset(&dasm_buffer, 0, dasm_buffer_len);
+
+				printf("[%04X] - ", z80ex_get_reg(ms.z80, regPC));
+				z80ex_dasm(
+					&dasm_buffer[0], dasm_buffer_len,
+					0,
+					&dasm_tstates, &dasm_tstates2,
+					z80ex_dasm_readbyte,
+					z80ex_get_reg(ms.z80, regPC),
+					0);
+				printf("%-15s  t=%d", dasm_buffer, dasm_tstates);
+				if(dasm_tstates2) {
+					printf("/%d", dasm_tstates2);
+				}
+				printf("\n");
+
 				z80ex_step(ms.z80);
 			}
 		}

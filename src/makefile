@@ -1,6 +1,6 @@
 
 CC = gcc
-LIBS = -lz80ex  -lSDLmain  -lSDL  -lSDL_gfx
+LIBS = -lz80ex -lz80ex_dasm -lSDLmain  -lSDL  -lSDL_gfx
 OUTFILE = msemu
 
 
