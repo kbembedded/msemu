@@ -662,6 +662,7 @@ int main(int argc, char *argv[])
 	MSHW ms;
 	int execute_counter = 0;
 	int tstate_counter = 0;
+	/* XXX: interrupt_period can change if running at different freq */
 	int interrupt_period = 187500;
 	int exitemu = 0;
 	uint32_t lasttick = SDL_GetTicks();
@@ -844,32 +845,55 @@ int main(int argc, char *argv[])
 			 */
 			execute_counter += currenttick - lasttick;
 
-			// The op code check is to verify we're not in the middle of
-			// processing a prefix opcode. We need to completely process
-			// these instructions before handling interrupts.
-			while (tstate_counter < interrupt_period || z80ex_last_op_type(ms.z80)){
-				if (!silent){
-					memset(&dasm_buffer, 0, dasm_buffer_len);
-					log_debug("[%04X] - ", z80ex_get_reg(ms.z80, regPC));
-					z80ex_dasm(
-						&dasm_buffer[0], dasm_buffer_len,
-						0,
-						&dasm_tstates, &dasm_tstates2,
-						z80ex_dasm_readbyte,
-						z80ex_get_reg(ms.z80, regPC),
-						&ms);
-					log_debug("%-15s  t=%d", dasm_buffer, dasm_tstates);
-					if(dasm_tstates2) {
-						log_debug("/%d", dasm_tstates2);
+			/* This loop is our real-time gating. The only reason
+			 * this loop should exit is:
+			 * We're single stepping
+			 * To process an NMI (every 64 Hz)
+			 *
+			 * Once we process an interrupt, stall execution
+			 * until the interrupt would have happened realtime.
+			 * This is based on CPU execution speed, default is
+			 * 12 MHz but can be changed on the fly via a port wr.
+			 *
+			 * Due to how z80ex processes steps, after a call to
+			 * z80ex_step() it might not be possible to NMI, if
+			 * thats the case, keep stepping until an NMI is
+			 * possible.
+			 *
+			 * This step process also means we need to ensure
+			 * we only decode full opcodes for dasm, the
+			 * z80ex_last_op_type() returns a 0 when the last op
+			 * was complete.
+			 * TODO: Clean up the call to dasm, can move it to a
+			 * log_* function and handle all of the buffers there
+			 */
+                        if (execute_counter > 15) {
+				execute_counter = 0;
+				while (tstate_counter < interrupt_period ||
+				  !z80ex_nmi_possible(ms.z80)) {
+					if (!silent && !z80ex_last_op_type(ms.z80)){
+						bzero(&dasm_buffer, dasm_buffer_len);
+						log_debug("[%04X] - ", z80ex_get_reg(ms.z80, regPC));
+						z80ex_dasm(
+							&dasm_buffer[0], dasm_buffer_len,
+							0,
+							&dasm_tstates, &dasm_tstates2,
+							z80ex_dasm_readbyte,
+							z80ex_get_reg(ms.z80, regPC),
+							0);
+						log_debug("%-15s  t=%d", dasm_buffer, dasm_tstates);
+						if(dasm_tstates2) {
+							log_debug("/%d", dasm_tstates2);
+						}
+						log_debug("\n");
 					}
-					log_debug("\n");
+
+					tstate_counter += z80ex_step(ms.z80);
 				}
 
-				tstate_counter += z80ex_step(ms.z80);
+				tstate_counter += process_interrupts(&ms);
+				tstate_counter %= interrupt_period;
 			}
-
-			tstate_counter += process_interrupts(&ms);
-			tstate_counter %= interrupt_period;
 		}
 
 		/* Update LCD if modified (at 20ms rate) */
