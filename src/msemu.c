@@ -12,11 +12,13 @@
 #include <fcntl.h>
 #include <time.h>
 #include <unistd.h>
+#include <signal.h>
 #include "rawcga.h"
 #include "logger.h"
 #include "msemu.h"
 #include "flashops.h"
 #include "ui.h"
+#include "debug.h"
 
 #include <SDL/SDL.h>
 #include <SDL/SDL_rotozoom.h>
@@ -26,6 +28,8 @@
 // Default entry of color palette to draw Mailstation LCD with
 uint8_t LCD_fg_color = 3;  // LCD black
 uint8_t LCD_bg_color = 2;  // LCD green
+
+int debug_console;
 
 // This table translates PC scancodes to the Mailstation key matrix
 int32_t keyTranslateTable[10][8] = {
@@ -646,6 +650,13 @@ void resetMailstation(MSHW* ms)
 	z80ex_set_reg(ms->z80, regPC, 0);
 }
 
+/* Debug support */
+void sigint(int sig)
+{
+	debug_console = 1;
+	printf("Received SIGINT, interrupting\n");
+}
+
 /* Main
  *
  * TODO:
@@ -658,6 +669,7 @@ int main(int argc, char *argv[])
 	char* logpath = NULL;
 	int c;
 	int silent = 1;
+	int single_step = 0;
 
 	MSHW ms;
 	int execute_counter = 0;
@@ -675,12 +687,17 @@ int main(int argc, char *argv[])
 	int dasm_tstates = 0;
 	int dasm_tstates2 = 0;
 
+	struct sigaction sigact;
+
 	static struct option long_opts[] = {
 	  { "help", no_argument, NULL, 'h' },
 	  { "codeflash", required_argument, NULL, 'c' },
 	  { "dataflash", required_argument, NULL, 'd' },
 	  { "logfile", optional_argument, NULL, 'l' },
 	  { "verbose", no_argument, NULL, 'v' },
+	/* TODO: Add argument to start with debug console open, e.g. execution
+	 * halted.
+	 */
 	  { NULL, no_argument, NULL, 0}
 	};
 
@@ -817,6 +834,10 @@ int main(int argc, char *argv[])
 	 * there is any reason to need this.
 	 */
 
+	/* Override ctrl+c to drop to debug console */
+	sigact.sa_handler = sigint;
+	sigaction(SIGINT, &sigact, NULL);
+
 	// Display startup message
 	powerOff(&ms);
 
@@ -824,6 +845,12 @@ int main(int argc, char *argv[])
 
 	while (!exitemu)
 	{
+		if (debug_console) {
+			single_step = debug_prompt();
+			debug_console = single_step;
+			/* TODO: Enable verbose output when single stepping? */
+		}
+
 		currenttick = SDL_GetTicks();
 
 		/* Let the Z80 process code at regular intervals */
@@ -864,10 +891,41 @@ int main(int argc, char *argv[])
 			 * we only decode full opcodes for dasm, the
 			 * z80ex_last_op_type() returns a 0 when the last op
 			 * was complete.
-			 * TODO: Clean up the call to dasm, can move it to a
-			 * log_* function and handle all of the buffers there
 			 */
-                        if (execute_counter > 15) {
+
+			/* BUG: Going from single step to run will cause a
+			 * mistimed NMI to occur since we are basing the count
+			 * on real time passing rather than any amount of exec
+			 * time.
+			 */
+			/* TODO: Clean up the call to dasm, can move it to a
+			 * log_* function and handle all of the buffers there
+			 * TODO: Consider moving the entire z80em_step() and
+			 * possible dasm use in to a single function of our
+			 * own?
+			 */
+			if (single_step) {
+				do {
+					if (!silent && !z80ex_last_op_type(ms.z80)){
+						bzero(&dasm_buffer, dasm_buffer_len);
+						log_debug("[%04X] - ", z80ex_get_reg(ms.z80, regPC));
+						z80ex_dasm(
+							&dasm_buffer[0], dasm_buffer_len,
+							0,
+							&dasm_tstates, &dasm_tstates2,
+							z80ex_dasm_readbyte,
+							z80ex_get_reg(ms.z80, regPC),
+							&ms);
+						log_debug("%-15s  t=%d", dasm_buffer, dasm_tstates);
+						if(dasm_tstates2) {
+							log_debug("/%d", dasm_tstates2);
+						}
+						log_debug("\n");
+					}
+					tstate_counter += z80ex_step(ms.z80);
+				} while (z80ex_last_op_type(ms.z80));
+
+			} else if (execute_counter > 15) {
 				execute_counter = 0;
 				while (tstate_counter < interrupt_period ||
 				  !z80ex_nmi_possible(ms.z80)) {
@@ -880,20 +938,22 @@ int main(int argc, char *argv[])
 							&dasm_tstates, &dasm_tstates2,
 							z80ex_dasm_readbyte,
 							z80ex_get_reg(ms.z80, regPC),
-							0);
+							&ms);
 						log_debug("%-15s  t=%d", dasm_buffer, dasm_tstates);
 						if(dasm_tstates2) {
 							log_debug("/%d", dasm_tstates2);
 						}
 						log_debug("\n");
 					}
-
 					tstate_counter += z80ex_step(ms.z80);
 				}
+			}
 
+			if (tstate_counter >= interrupt_period) {
 				tstate_counter += process_interrupts(&ms);
 				tstate_counter %= interrupt_period;
 			}
+
 		}
 
 		/* Update LCD if modified (at 20ms rate) */
