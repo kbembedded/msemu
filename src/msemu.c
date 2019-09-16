@@ -217,33 +217,34 @@ Z80EX_BYTE z80ex_mread(
 	 * to the slot handling logic.
 	 */
 	switch (current_device & 0x0F)	{
-	  case 0: /* Codeflash */
+	  case CF: /* Codeflash */
 		if (current_page >= 64) {
 			log_error("[%04X] * INVALID CODEFLASH PAGE: %d\n",
 			  z80ex_get_reg(cpu, regPC),current_page);
 		}
 		return readCodeFlash(ms, translated_addr);
 
-	  case 1: /* Dataflash */
+	  case RAM: /* Dataflash */
 		if (current_page >= 8) {
 			log_error("[%04X] * INVALID RAM PAGE: %d\n",
 			  z80ex_get_reg(cpu, regPC), current_page);
 		}
 		return readRAM(ms, translated_addr);
 
-	  case 2: /* LCD, left side */
+	  case LCD_L: /* LCD, left side */
 		return readLCD(ms, newaddr, MS_LCD_LEFT);
-		case 3: /* Dataflash */
+
+	  case DF: /* Dataflash */
 		if (current_page >= 32) {
 			log_error("[%04X] * INVALID DATAFLASH PAGE: %d\n",
 			  z80ex_get_reg(cpu, regPC), current_page);
 		}
 		return readDataflash(ms, translated_addr);
 
-	  case 4: /* LCD, right side */
+	  case LCD_R: /* LCD, right side */
 		return readLCD(ms, newaddr, MS_LCD_RIGHT);
 
-	  case 5: /* MODEM */
+	  case MODEM: /* MODEM */
 		log_debug("[%04X] * READ FROM MODEM UNSUPPORTED: %04X\n",
 		  z80ex_get_reg(cpu, regPC), newaddr);
 		break;
@@ -321,12 +322,12 @@ void z80ex_mwrite(
 	 * a problem here. Regardless, still mask those off.
 	 */
 	switch(current_device & 0x0F) {
-	  case 0: /* Codeflash */
+	  case CF: /* Codeflash */
 		log_error("[%04X] * WRITE TO CODEFLASH UNSUPPORTED\n",
 		  z80ex_get_reg(cpu, regPC));
 		break;
 
-	  case 1: /* RAM */
+	  case RAM: /* RAM */
 		if (current_page >= 8) {
 			log_error("[%04X] * INVALID RAM PAGE: %d\n",
 			  z80ex_get_reg(cpu, regPC), current_page);
@@ -334,11 +335,11 @@ void z80ex_mwrite(
 		writeRAM(ms, translated_addr, val);
 		break;
 
-	  case 2: /* LCD, left side */
+	  case LCD_L: /* LCD, left side */
 		writeLCD(ms, newaddr, val, MS_LCD_LEFT);
 		break;
 
-	  case 3: /* Dataflash */
+	  case DF: /* Dataflash */
 		if (current_page >= 32) {
 			log_error("[%04X] * INVALID DATAFLASH PAGE: %d\n",
 			  z80ex_get_reg(cpu, regPC), current_page);
@@ -346,11 +347,11 @@ void z80ex_mwrite(
 		ms->dataflash_updated = writeDataflash(ms, translated_addr, val);
 		break;
 
-	  case 4: /* LCD, right side */
+	  case LCD_R: /* LCD, right side */
 		writeLCD(ms, newaddr, val, MS_LCD_RIGHT);
 		break;
 
-	  case 5: /* MODEM */
+	  case MODEM: /* MODEM */
 		log_debug("[%04X] WRITE TO MODEM UNSUPPORTED: %04X %02X\n",
 		  z80ex_get_reg(cpu, regPC), newaddr, val);
 		break;

@@ -19,6 +19,17 @@
 #define MS_POWERSTATE_ON  1
 #define MS_POWERSTATE_OFF 0
 
+enum ms_device_map {
+	CF 	= 0x00,
+	RAM 	= 0x01,
+	LCD_L 	= 0x02,
+	DF 	= 0x03,
+	LCD_R 	= 0x04,
+	MODEM 	= 0x05,
+
+	DEV_CNT,
+};
+
 typedef struct mshw {
 	Z80EX_CONTEXT* z80;
 	uint8_t *ram;
