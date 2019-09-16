@@ -633,21 +633,6 @@ void resetMailstation(MSHW* ms)
 	ms->power_state = MS_POWERSTATE_ON;
 	ms->interrupt_mask = 0;
 	z80ex_reset(ms->z80);
-
-	// Mailstation seems to expect registers to be initialized to zero,
-	// so we set them all to zero here to be safe.
-	z80ex_set_reg(ms->z80, regAF, 0);
-	z80ex_set_reg(ms->z80, regAF_, 0);
-	z80ex_set_reg(ms->z80, regBC, 0);
-	z80ex_set_reg(ms->z80, regBC_, 0);
-	z80ex_set_reg(ms->z80, regDE, 0);
-	z80ex_set_reg(ms->z80, regDE_, 0);
-	z80ex_set_reg(ms->z80, regHL, 0);
-	z80ex_set_reg(ms->z80, regHL_, 0);
-	z80ex_set_reg(ms->z80, regIX, 0);
-	z80ex_set_reg(ms->z80, regIY, 0);
-	z80ex_set_reg(ms->z80, regSP, 0);
-	z80ex_set_reg(ms->z80, regPC, 0);
 }
 
 /* Debug support */
