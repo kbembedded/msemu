@@ -106,6 +106,9 @@ typedef struct mshw {
 
 	// Holds current power state (on or off)
 	uint8_t power_state;
+
+	// Single breakpoint on a specified PC
+	int32_t bp;
 } MSHW;
 
 #endif // __MSEMU_H_

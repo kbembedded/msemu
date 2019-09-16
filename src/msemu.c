@@ -758,6 +758,7 @@ int main(int argc, char *argv[])
 	ms.interrupt_mask = 0;
 	ms.power_button = 0;
 	ms.power_state = MS_POWERSTATE_OFF;
+	ms.bp = -1;
 
 	/* Initialize the slot_map */
 	ms.slot_map[0] = ms.dev_map[CF]; /* slot0000 is always CF_0 */
@@ -831,7 +832,7 @@ int main(int argc, char *argv[])
 	while (!exitemu)
 	{
 		if (debug_console) {
-			single_step = debug_prompt();
+			single_step = debug_prompt(&ms);
 			debug_console = single_step;
 			/* TODO: Enable verbose output when single stepping? */
 		}
@@ -888,6 +889,8 @@ int main(int argc, char *argv[])
 			 * TODO: Consider moving the entire z80em_step() and
 			 * possible dasm use in to a single function of our
 			 * own?
+			 * BUG: with breakpoint at PC, might cause issues for
+			 * prefix'ed instructions?
 			 */
 			if (single_step) {
 				do {
@@ -908,6 +911,10 @@ int main(int argc, char *argv[])
 						log_debug("\n");
 					}
 					tstate_counter += z80ex_step(ms.z80);
+					if (z80ex_get_reg(ms.z80, regPC) == ms.bp) {
+						debug_console = 1;
+						break;
+					}
 				} while (z80ex_last_op_type(ms.z80));
 
 			} else if (execute_counter > 15) {
@@ -931,6 +938,10 @@ int main(int argc, char *argv[])
 						log_debug("\n");
 					}
 					tstate_counter += z80ex_step(ms.z80);
+					if (z80ex_get_reg(ms.z80, regPC) == ms.bp) {
+						debug_console = 1;
+						break;
+					}
 				}
 			}
 

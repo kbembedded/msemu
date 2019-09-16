@@ -2,6 +2,7 @@
 #define __DEBUG_H__
 
 #include <stdio.h>
+#include "msemu.h"
 
 enum arguments {
 	no_arg = 0,
@@ -16,11 +17,6 @@ struct cmdtable {
 	char arg;
 };
 
-struct breakpoints {
-	uint16_t pc;
-	struct breakpoints *next;
-};
-
-int debug_prompt(void);
+int debug_prompt(MSHW *ms);
 
 #endif
