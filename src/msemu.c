@@ -444,7 +444,7 @@ Z80EX_BYTE z80ex_pread (
 
 		// acknowledge power good + power button status
 		case 0x09:
-			return (uint8_t)0xE0 | ((ms->power_button & 1) << 4);
+			return (uint8_t)0xE0 | ((~ms->power_button & 1) << 4);
 
 
 		// These are all for the RTC
