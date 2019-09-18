@@ -33,6 +33,15 @@ enum ms_device_map {
 enum ms_port_map {
 	KEYBOARD	= 0x01,
 	MISC2		= 0x02,
+		/*	p3.7 = Caller id handler
+			p3.5 = maybe rtc???
+			p3.6 = Modem handler
+			p3.4 = increment time16
+			p3.3 = null
+			p3.0 = null
+			p3.1 = Keyboard handler
+			p3.2 = null
+		*/
 	IRQ_MASK	= 0x03,
 	UNKNOWN0x4	= 0x04,
 	SLOT4_PAGE	= 0x05,

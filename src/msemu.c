@@ -364,131 +364,135 @@ void z80ex_mwrite(
 }
 
 
-
-//----------------------------------------------------------------------------
-//
-//  z80ex I/O port input handler
-//
+/* z80ex Read from PORT callback function
+ *
+ * Return a Z80EX_BYTE (uint8_t basically) value of the requested PORT number.
+ * Many ports are read and written as normal and have no emulation impact.
+ * However a handful of ports do special things and are required for useable
+ * emulation. These cases are specially handled as needed.
+ *
+ * See Mailstation documentation for specific PORT layouts and uses.
+ */
+/* TODO: Use enum for bit positions within regs */
 Z80EX_BYTE z80ex_pread (
 	Z80EX_CONTEXT *cpu,
 	Z80EX_WORD port,
 	void *user_data)
 {
-	// We need to mask off the upper byte here because
-	// z80ex can't process the port number properly otherwise.
-	uint16_t addr = port & 0x00FF;
+
 	MSHW* ms = (MSHW*)user_data;
 
-	// This is for the RTC on P10-1C
 	time_t theTime;
+	struct tm *rtc_time = NULL;
+
+	uint16_t kbaddr;
+	uint8_t kbresult;
+	int i;
+
+	Z80EX_BYTE ret = 0;
+
+	/* TODO: Refactor this so we're not getting the time on EVERY single
+	 * PORT read.
+	 */
 	time( &theTime );
-	struct tm *rtc_time = localtime(&theTime);
+	rtc_time = localtime(&theTime);
 
-	log_debug(" * IO  READ  [  %02X] -> %02X\n", addr, ms->io[addr]);
+	/* z80ex sets the upper bits of the port address, we don't want that */
+	port &= 0xFF;
 
-	//if (addr < 5 || addr > 8) printf("* IO <- %04X - %02X\n",addr,ms.io[addr]);
+	log_debug(" * IO  READ  [  %02X] -> %02X\n", port, ms->io[port]);
 
-	switch (addr)
-	{
+	switch (port) {
+	  case KEYBOARD:// emulate keyboard matrix output
+		// keyboard row is 10 bits wide, P1.x = low bits, P2.0-1 = high bits
+		kbaddr = ms->io[KEYBOARD] + ((ms->io[MISC2] & 3) << 8);
 
-		// emulate keyboard matrix output
-		case KEYBOARD:
-			{
-				// keyboard row is 10 bits wide, P1.x = low bits, P2.0-1 = high bits
-				unsigned short kbaddr = ms->io[1] + ((ms->io[2] & 3) << 8);
+		// all returned bits should be high unless a key is pressed
+		kbresult = 0xFF;
 
-				// all returned bits should be high unless a key is pressed
-				uint8_t kbresult = 0xFF;
+		// check for a key pressed in active row(s)
+		for (i = 0; i < 10; i++) {
+			if (!((kbaddr >> i) & 1)) kbresult &= ms->key_matrix[i];
+		}
+		ret = kbresult;
 
-				// check for a key pressed in active row(s)
-				int n;
-				for (n = 0; n < 10; n++)
-				{
-					if (!((kbaddr >> n) & 1)) kbresult &= ms->key_matrix[n];
-				}
+		break;
 
-				return kbresult;
-			}
-			break;
+	  // return currently triggered interrupts
+	  case IRQ_MASK:
+		ret = ms->interrupt_mask;
+		break;
 
-		// return currently triggered interrupts
-		case IRQ_MASK:
-			/*	p3.7 = Caller id handler
-				p3.5 = maybe rtc???
-				p3.6 = Modem handler
-				p3.4 = increment time16
-				p3.3 = null
-				p3.0 = null
-				p3.1 = Keyboard handler
-				p3.2 = null
-			*/
-			return ms->interrupt_mask;
-			break;
+	  // acknowledge power good + power button status
+	  // Also has some parport control bits
+	  /* TODO: Implement hooks here to set various power
+	   * states for testing?
+	   */
+	  case MISC9:
+		ret = (uint8_t)0xE0 | ((~ms->power_button & 1) << 4);
+		break;
 
+	  // These are all for the RTC
+	  case RTC_SEC: //seconds
+		ret = (hex2bcd(rtc_time->tm_sec) & 0x0F);
+		break;
+	  case RTC_10SEC: //10 seconds
+		ret = ((hex2bcd(rtc_time->tm_sec) & 0xF0) >> 4);
+		break;
+	  case RTC_MIN: // minutes
+		ret = (hex2bcd(rtc_time->tm_min) & 0x0F);
+		break;
+	  case RTC_10MIN: // 10 minutes
+		ret = ((hex2bcd(rtc_time->tm_min) & 0xF0) >> 4);
+		break;
+	  case RTC_HR: // hours
+		ret = (hex2bcd(rtc_time->tm_hour) & 0x0F);
+		break;
+	  case RTC_10HR: // 10 hours
+		ret = ((hex2bcd(rtc_time->tm_hour) & 0xF0) >> 4);
+		break;
+	  case RTC_DOW: // day of week
+		ret = rtc_time->tm_wday;
+		break;
+	  case RTC_DOM: // days
+		ret = (hex2bcd(rtc_time->tm_mday) & 0x0F);
+		break;
+	  case RTC_10DOM: // 10 days
+		ret = ((hex2bcd(rtc_time->tm_mday) & 0xF0) >> 4);
+		break;
+	  case RTC_MON: // months
+		ret = (hex2bcd(rtc_time->tm_mon + 1) & 0x0F);
+		break;
+	  case RTC_10MON: // 10 months
+		ret = ((hex2bcd(rtc_time->tm_mon + 1) & 0xF0) >> 4);
+		break;
+	  case RTC_YR: // years
+		ret = (hex2bcd(rtc_time->tm_year + 80) & 0x0F);
+		break;
+	  case RTC_10YR: // 10 years
+		ret = ((hex2bcd(rtc_time->tm_year + 80) & 0xF0) >> 4);
+		break;
 
-		// acknowledge power good + power button status
-		// Also has some parport control bits
-		/* TODO: Implement hooks here to set various power
-		 * states for testing?
-		 */
-		case MISC9:
-			return (uint8_t)0xE0 | ((~ms->power_button & 1) << 4);
-			break;
-
-
-		// These are all for the RTC
-		case RTC_SEC: //seconds
-			return (hex2bcd(rtc_time->tm_sec) & 0x0F);
-		case RTC_10SEC: //10 seconds
-			return ((hex2bcd(rtc_time->tm_sec) & 0xF0) >> 4);
-		case RTC_MIN: // minutes
-			return (hex2bcd(rtc_time->tm_min) & 0x0F);
-		case RTC_10MIN: // 10 minutes
-			return ((hex2bcd(rtc_time->tm_min) & 0xF0) >> 4);
-		case RTC_HR: // hours
-			return (hex2bcd(rtc_time->tm_hour) & 0x0F);
-		case RTC_10HR: // 10 hours
-			return ((hex2bcd(rtc_time->tm_hour) & 0xF0) >> 4);
-		case RTC_DOW: // day of week
-			return rtc_time->tm_wday;
-		case RTC_DOM: // days
-			return (hex2bcd(rtc_time->tm_mday) & 0x0F);
-		case RTC_10DOM: // 10 days
-			return ((hex2bcd(rtc_time->tm_mday) & 0xF0) >> 4);
-		case RTC_MON: // months
-			return (hex2bcd(rtc_time->tm_mon + 1) & 0x0F);
-		case RTC_10MON: // 10 months
-			return ((hex2bcd(rtc_time->tm_mon + 1) & 0xF0) >> 4);
-		case RTC_YR: // years
-			return (hex2bcd(rtc_time->tm_year + 80) & 0x0F);
-		case RTC_10YR: // 10 years
-			return ((hex2bcd(rtc_time->tm_year + 80) & 0xF0) >> 4);
-			break;
-
-		// NOTE: lots of activity on these two during normal loop
-		case PRINT_STATUS:
-		case RTC_CTRL1:
-		case MISC2:
-		// page/device ports
-		case SLOT4_PAGE:
-		case SLOT4_DEV:
-		case SLOT8_PAGE:
-		case SLOT8_DEV:
-
-		default:
-			//printf("* UNKNOWN IO <- %04X - %02X\n",addr, ms.io[addr]);
-			return ms->io[addr];
-			break;
+	  default:
+		//printf("* UNKNOWN IO <- %04X - %02X\n",addr, ms.io[addr]);
+		ret = ms->io[port];
+		break;
 	}
 
+	return ret;
 }
 
 
 
-//----------------------------------------------------------------------------
-//
-//  z80ex I/O port output handler
-//
+/* z80ex Write to PORT callback function
+ *
+ * Write a uint8_t value to the port address given to us.
+ * Many ports are read and written as normal and have no emulation impact.
+ * However a handful of ports do special things and are required for useable
+ * emulation. These cases are specially handled as needed.
+ *
+ * See Mailstation documentation for specific PORT layouts and uses.
+ */
 /* XXX: Clean up this LED code at some point, have "real" LED on SDL window */
 void z80ex_pwrite (
 	Z80EX_CONTEXT *cpu,
@@ -496,80 +500,76 @@ void z80ex_pwrite (
 	Z80EX_BYTE val,
 	void *user_data)
 {
+
+	MSHW* ms = (MSHW*)user_data;
 	static uint8_t tmp_reg;
 
-	// We need to mask off the upper byte here because
-	// z80ex can't process the port number properly otherwise.
-	uint16_t addr = port & 0x00FF;
-	MSHW* ms = (MSHW*)user_data;
 
-	log_debug(" * IO  WRITE [  %02X] <- %02X\n", addr, val);
+	/* z80ex sets the upper bits of the port address, we don't want that */
+	port &= 0xFF;
 
-	//if (addr < 5 || addr > 8) printf("* IO -> %04X - %02X\n",addr, val);
+	log_debug(" * IO  WRITE [  %02X] <- %02X\n", port, val);
 
-	switch (addr)
-	{
-		case MISC2:
-			if ((tmp_reg & (1 << 4)) != (val & (1 << 4))) {
-				if (val & (1 << 4)) {
-					tmp_reg |= (1 << 4);
-					printf("LED on\n");
-				} else {
-					tmp_reg &= ~(1 << 4);
-					printf("LED off\n");
-				}
+	//if (port < 5 || port > 8) printf("* IO -> %04X - %02X\n",port, val);
+
+	switch (port) {
+	  case MISC2:
+		if ((tmp_reg & (1 << 4)) != (val & (1 << 4))) {
+			if (val & (1 << 4)) {
+				tmp_reg |= (1 << 4);
+				printf("LED on\n");
+			} else {
+				tmp_reg &= ~(1 << 4);
+				printf("LED off\n");
 			}
+		}
+		ms->io[port] = val;
+		break;
 
-		// set interrupt masks
-		case IRQ_MASK:
-			ms->interrupt_mask &= val;
-			ms->io[addr] = val;
-			break;
+	  // set interrupt masks
+	  case IRQ_MASK:
+		ms->interrupt_mask &= val;
+		ms->io[port] = val;
+		break;
 
-		// set slot4000 page
-		case SLOT4_PAGE:
-			ms->slot4000_page = val;
-			ms->io[addr] = ms->slot4000_page;
-			break;
+	  // set slot4000 page
+	  case SLOT4_PAGE:
+		ms->slot4000_page = val;
+		ms->io[port] = ms->slot4000_page;
+		break;
 
-		// set slot4000 device
-		case SLOT4_DEV:
-			ms->slot4000_device = val;
-			ms->io[addr] = ms->slot4000_device;
-			break;
+	  // set slot4000 device
+	  case SLOT4_DEV:
+		ms->slot4000_device = val;
+		ms->io[port] = ms->slot4000_device;
+		break;
 
-		// set slot8000 page
-		case SLOT8_PAGE:
-			ms->slot8000_page = val;
-			ms->io[addr] = ms->slot8000_page;
-			break;
+	  // set slot8000 page
+	  case SLOT8_PAGE:
+		ms->slot8000_page = val;
+		ms->io[port] = ms->slot8000_page;
+		break;
 
-		// set slot8000 device
-		case SLOT8_DEV:
-			ms->slot8000_device = val;
-			ms->io[addr] = ms->slot8000_device;
-			break;
+	  // set slot8000 device
+	  case SLOT8_DEV:
+		ms->slot8000_device = val;
+		ms->io[port] = ms->slot8000_device;
+		break;
 
-		// check for hardware power off bit in P28
-		case UNKNOWN0x28:
-			if (val & 1)
-			{
-				printf("POWER OFF\n");
-				powerOff(ms);
-			}
-			ms->io[addr] = val;
-			break;
+	  // check for hardware power off bit in P28
+	  case UNKNOWN0x28:
+		if (val & 1) {
+			printf("POWER OFF\n");
+			powerOff(ms);
+		}
+		ms->io[port] = val;
+		break;
 
-		case KEYBOARD:
-		// Note: Lots of activity on these next ones during normal loop
-		case PRINT_DDR:
-		case PRINT_DR:
-		case RTC_CTRL1:
-		// otherwise just save written value
-		default:
-			//printf("* UNKNOWN IO -> %04X - %02X\n",addr, val);
-			ms->io[addr] = val;
-			break;
+	  // otherwise just save written value
+	  default:
+		//printf("* UNKNOWN IO -> %04X - %02X\n",port, val);
+		ms->io[port] = val;
+		break;
 	}
 }
 
@@ -607,32 +607,11 @@ void generateKeyboardMatrix(MSHW* ms, int scancode, int eventtype)
 	}
 }
 
-// Current IRQ status. Checked after EI occurs.  We won't need it (for now).
-// TODO: Z80em - is there a z80ex equivalent?
-// int Z80_IRQ;
-
-// Run after a RETI
-void z80ex_reti (
-	Z80EX_CONTEXT *cpu,
-	void *user_data)
-{
-	return;
-}
-
-// Run after a RETN
-// TODO: Z80em - is there a z80ex equivalent?
-// void Z80_Retn (void)
-// {
-// 	return;
-// }
-
-// Can emulate stuff which we don't need
-// TODO: Z80em - is there a z80ex equivalent?
-// void Z80_Patch (Z80_Regs *Regs)
-// {
-// 	return;
-// }
-
+/* z80ex emulation requires that intread callback be defined.
+ * As far as is known, there is no INT used on the Mailsattion. The only IRQs
+ * are NMI for timers, which launch other handlers from there. If the error
+ * below is ever encountered, that means that this actually is used somewhere.
+ */
 Z80EX_BYTE z80ex_intread (
 	Z80EX_CONTEXT *cpu,
 	void *user_data)
@@ -870,7 +849,12 @@ int main(int argc, char *argv[])
 		z80ex_pwrite, (void*)&ms,
 		z80ex_intread, (void*)&ms
 	);
-	z80ex_set_reti_callback(ms.z80, z80ex_reti, (void*)&ms);
+
+	/* NOTE:
+	 * The z80ex library can hook in to RETI opcodes. Allowing us to exec
+	 * code here to emulate PIO or other. At this time, I don't think
+	 * there is any reason to need this.
+	 */
 
 	// Display startup message
 	powerOff(&ms);
