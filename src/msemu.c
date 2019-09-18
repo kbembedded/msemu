@@ -41,13 +41,6 @@ int32_t keyTranslateTable[10][8] = {
 	{ SDLK_LCTRL, 0, 0, SDLK_SPACE, 0, 0, SDLK_RSHIFT, SDLK_LEFT }
 };
 
-
-// Some function declarations for later
-void powerOff();
-
-
-
-
 //----------------------------------------------------------------------------
 //
 //  Convert uint8_t to BCD format
@@ -58,6 +51,19 @@ unsigned char hex2bcd (unsigned char x)
 	y = (x / 10) << 4;
 	y = y | (x % 10);
 	return y;
+}
+
+//----------------------------------------------------------------------------
+//
+//  Disables emulation, displays opening screen
+//
+void powerOff(MSHW* ms)
+{
+	ms->power_state = MS_POWERSTATE_OFF;
+
+	// clear LCD
+	memset(ms->lcd_dat8bit, 0, MS_LCD_WIDTH * MS_LCD_HEIGHT);
+	ui_drawSplashScreen();
 }
 
 //----------------------------------------------------------------------------
@@ -558,7 +564,7 @@ void z80ex_pwrite (
 			if (val & 1)
 			{
 				printf("POWER OFF\n");
-				powerOff();
+				powerOff(ms);
 			}
 			ms->io[addr] = val;
 			break;
@@ -708,20 +714,6 @@ void resetMailstation(MSHW* ms)
 	z80ex_set_reg(ms->z80, regIY, 0);
 	z80ex_set_reg(ms->z80, regSP, 0);
 	z80ex_set_reg(ms->z80, regPC, 0);
-}
-
-
-//----------------------------------------------------------------------------
-//
-//  Disables emulation, displays opening screen
-//
-void powerOff(MSHW* ms)
-{
-	ms->power_state = MS_POWERSTATE_OFF;
-
-	// clear LCD
-	memset(ms->lcd_dat8bit, 0, MS_LCD_WIDTH * MS_LCD_HEIGHT);
-	ui_drawSplashScreen();
 }
 
 /* Main
