@@ -392,7 +392,7 @@ Z80EX_BYTE z80ex_pread (
 	{
 
 		// emulate keyboard matrix output
-		case 0x01:
+		case KEYBOARD:
 			{
 				// keyboard row is 10 bits wide, P1.x = low bits, P2.0-1 = high bits
 				unsigned short kbaddr = ms->io[1] + ((ms->io[2] & 3) << 8);
@@ -411,18 +411,8 @@ Z80EX_BYTE z80ex_pread (
 			}
 			break;
 
-
-		// NOTE: lots of activity on these two during normal loop
-		case 0x21:
-		case 0x1D:
-
-		case 0x02:
-			return ms->io[addr];
-
-
-
 		// return currently triggered interrupts
-		case 0x03:
+		case IRQ_MASK:
 			/*	p3.7 = Caller id handler
 				p3.5 = maybe rtc???
 				p3.6 = Modem handler
@@ -435,51 +425,60 @@ Z80EX_BYTE z80ex_pread (
 			return ms->interrupt_mask;
 			break;
 
-		// page/device ports
-		case 0x05:
-		case 0x06:
-		case 0x07:
-		case 0x08:
-			return ms->io[addr];
-
 
 		// acknowledge power good + power button status
-		case 0x09:
+		// Also has some parport control bits
+		/* TODO: Implement hooks here to set various power
+		 * states for testing?
+		 */
+		case MISC9:
 			return (uint8_t)0xE0 | ((~ms->power_button & 1) << 4);
+			break;
 
 
 		// These are all for the RTC
-		case 0x10: //seconds
+		case RTC_SEC: //seconds
 			return (hex2bcd(rtc_time->tm_sec) & 0x0F);
-		case 0x11: //10 seconds
+		case RTC_10SEC: //10 seconds
 			return ((hex2bcd(rtc_time->tm_sec) & 0xF0) >> 4);
-		case 0x12: // minutes
+		case RTC_MIN: // minutes
 			return (hex2bcd(rtc_time->tm_min) & 0x0F);
-		case 0x13: // 10 minutes
+		case RTC_10MIN: // 10 minutes
 			return ((hex2bcd(rtc_time->tm_min) & 0xF0) >> 4);
-		case 0x14: // hours
+		case RTC_HR: // hours
 			return (hex2bcd(rtc_time->tm_hour) & 0x0F);
-		case 0x15: // 10 hours
+		case RTC_10HR: // 10 hours
 			return ((hex2bcd(rtc_time->tm_hour) & 0xF0) >> 4);
-		case 0x16: // day of week
+		case RTC_DOW: // day of week
 			return rtc_time->tm_wday;
-		case 0x17: // days
+		case RTC_DOM: // days
 			return (hex2bcd(rtc_time->tm_mday) & 0x0F);
-		case 0x18: // 10 days
+		case RTC_10DOM: // 10 days
 			return ((hex2bcd(rtc_time->tm_mday) & 0xF0) >> 4);
-		case 0x19: // months
+		case RTC_MON: // months
 			return (hex2bcd(rtc_time->tm_mon + 1) & 0x0F);
-		case 0x1A: // 10 months
+		case RTC_10MON: // 10 months
 			return ((hex2bcd(rtc_time->tm_mon + 1) & 0xF0) >> 4);
-		case 0x1B: // years
+		case RTC_YR: // years
 			return (hex2bcd(rtc_time->tm_year + 80) & 0x0F);
-		case 0x1C: // 10 years
+		case RTC_10YR: // 10 years
 			return ((hex2bcd(rtc_time->tm_year + 80) & 0xF0) >> 4);
 			break;
+
+		// NOTE: lots of activity on these two during normal loop
+		case PRINT_STATUS:
+		case RTC_CTRL1:
+		case MISC2:
+		// page/device ports
+		case SLOT4_PAGE:
+		case SLOT4_DEV:
+		case SLOT8_PAGE:
+		case SLOT8_DEV:
 
 		default:
 			//printf("* UNKNOWN IO <- %04X - %02X\n",addr, ms.io[addr]);
 			return ms->io[addr];
+			break;
 	}
 
 }
@@ -510,7 +509,7 @@ void z80ex_pwrite (
 
 	switch (addr)
 	{
-		case 0x02:
+		case MISC2:
 			if ((tmp_reg & (1 << 4)) != (val & (1 << 4))) {
 				if (val & (1 << 4)) {
 					tmp_reg |= (1 << 4);
@@ -520,48 +519,39 @@ void z80ex_pwrite (
 					printf("LED off\n");
 				}
 			}
-		case 0x01:
-
-		// Note: Lots of activity on these next ones during normal loop
-		case 0x2C:
-		case 0x2D:
-		case 0x1D:
-			ms->io[addr] = val;
-			break;
-
 
 		// set interrupt masks
-		case 0x03:
+		case IRQ_MASK:
 			ms->interrupt_mask &= val;
 			ms->io[addr] = val;
 			break;
 
 		// set slot4000 page
-		case 0x05:
+		case SLOT4_PAGE:
 			ms->slot4000_page = val;
 			ms->io[addr] = ms->slot4000_page;
 			break;
 
 		// set slot4000 device
-		case 0x06:
+		case SLOT4_DEV:
 			ms->slot4000_device = val;
 			ms->io[addr] = ms->slot4000_device;
 			break;
 
 		// set slot8000 page
-		case 0x07:
+		case SLOT8_PAGE:
 			ms->slot8000_page = val;
 			ms->io[addr] = ms->slot8000_page;
 			break;
 
 		// set slot8000 device
-		case 0x08:
+		case SLOT8_DEV:
 			ms->slot8000_device = val;
 			ms->io[addr] = ms->slot8000_device;
 			break;
 
 		// check for hardware power off bit in P28
-		case 0x028:
+		case UNKNOWN0x28:
 			if (val & 1)
 			{
 				printf("POWER OFF\n");
@@ -570,10 +560,16 @@ void z80ex_pwrite (
 			ms->io[addr] = val;
 			break;
 
+		case KEYBOARD:
+		// Note: Lots of activity on these next ones during normal loop
+		case PRINT_DDR:
+		case PRINT_DR:
+		case RTC_CTRL1:
 		// otherwise just save written value
 		default:
 			//printf("* UNKNOWN IO -> %04X - %02X\n",addr, val);
 			ms->io[addr] = val;
+			break;
 	}
 }
 

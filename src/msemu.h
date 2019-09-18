@@ -20,14 +20,52 @@
 #define MS_POWERSTATE_OFF 0
 
 enum ms_device_map {
-	CF 	= 0x00,
-	RAM 	= 0x01,
-	LCD_L 	= 0x02,
-	DF 	= 0x03,
-	LCD_R 	= 0x04,
-	MODEM 	= 0x05,
+	CF 		= 0x00,
+	RAM 		= 0x01,
+	LCD_L 		= 0x02,
+	DF 		= 0x03,
+	LCD_R 		= 0x04,
+	MODEM 		= 0x05,
 
 	DEV_CNT,
+};
+
+enum ms_port_map {
+	KEYBOARD	= 0x01,
+	MISC2		= 0x02,
+	IRQ_MASK	= 0x03,
+	UNKNOWN0x4	= 0x04,
+	SLOT4_PAGE	= 0x05,
+	SLOT4_DEV	= 0x06,
+	SLOT8_PAGE	= 0x07,
+	SLOT8_DEV	= 0x08,
+	MISC9		= 0x09, /* Printer ctrl, pwr ok, pwr btn */
+	RTC_SEC		= 0x10, /* BCD, ones place seconds */
+	RTC_10SEC	= 0x11, /* BCD, tens place seconds */
+	RTC_MIN		= 0x12, /* BCD, ones place minutes */
+	RTC_10MIN	= 0x13, /* BCD, tens place minutes */
+	RTC_HR		= 0x14, /* BCD, ones place hours */
+	RTC_10HR	= 0x15, /* BCD, tens place hours */
+	RTC_DOW		= 0x16, /* BCD, day of week */
+	RTC_DOM		= 0x17, /* BCD, ones place day of month */
+	RTC_10DOM	= 0x18, /* BCD, tens place day of month */
+	RTC_MON		= 0x19, /* BCD, ones place month */
+	RTC_10MON	= 0x1A, /* BCD, tens place month */
+	RTC_YR		= 0x1B, /* BCD, ones place years since 1980 */
+	RTC_10YR	= 0x1C, /* BCD, tens place years since 1980 */
+	RTC_CTRL1	= 0x1D, /* Unknown */
+	RTC_CTRL2	= 0x1E, /* Unknown */
+	RTC_CTRL3	= 0x1F, /* Unknown */
+
+	PRINT_STATUS	= 0x21, /* Unknown */
+	PRINT_DDR	= 0x2C,
+	PRINT_DR	= 0x2D,
+
+	UNKNOWN0x28	= 0x28,
+
+	PORT_CNT	= 0x10000, /* XXX: Currently 64 KiB is used, not sure
+				    * what the actual needed amount is.
+				    */
 };
 
 typedef struct mshw {
