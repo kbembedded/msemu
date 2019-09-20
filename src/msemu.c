@@ -73,17 +73,20 @@ void powerOff(MSHW* ms)
 void writeLCD(MSHW* ms, uint16_t newaddr, uint8_t val, int lcdnum)
 {
 	uint8_t *lcd_ptr;
-	if (lcdnum == MS_LCD_LEFT) lcd_ptr = ms->lcd_dat1bit;
+	if (lcdnum == LCD_L) lcd_ptr = ms->lcd_dat1bit;
 	/* XXX: Fix the use of this magic number, replace with a const */
 	else lcd_ptr = &ms->lcd_dat1bit[4800];
-	if (!lcd_ptr) return;
 
+	/* XXX: This might need to be reworked to use non-viewable LCD memory */
 	// Wraps memory address if out of bounds
-	while (newaddr >= 240) newaddr -= 240;
+	if (newaddr >= 240) newaddr %= 240;
 
 	// Check CAS bit on P2
-	if (ms->io[2] & 8)
+	if (ms->io[MISC2] & 8)
 	{
+		log_debug(" * LCD%s W [%04X] <- %02X\n",
+		  lcdnum == LCD_L ? "_L" : "_R", newaddr, val);
+
 		// Write data to currently selected LCD column.
 		// This is just used for reading back LCD contents to the Mailstation quickly.
 		lcd_ptr[newaddr + (ms->lcd_cas * 240)] = val;
@@ -97,7 +100,7 @@ void writeLCD(MSHW* ms, uint16_t newaddr, uint8_t val, int lcdnum)
 		// Reverse column # (MS col #0 starts on right side)
 		int x = 19 - ms->lcd_cas;
 		// Use right half if necessary
-		if (lcdnum == MS_LCD_RIGHT) x += 20;
+		if (lcdnum == LCD_R) x += 20;
 
 		// Write out all 8 bits to separate bytes, using the current emulated LCD color
 		int n;
@@ -108,11 +111,13 @@ void writeLCD(MSHW* ms, uint16_t newaddr, uint8_t val, int lcdnum)
 
 		// Let main loop know to update screen with new LCD data
 		ms->lcd_lastupdate = SDL_GetTicks();
+	} else {
+		log_debug(" * LCD%s W [ CAS] <- %02X\n",
+		  lcdnum == LCD_L ? "_L" : "_R", newaddr, val);
+
+		// If CAS line is low, set current column instead
+		ms->lcd_cas = val;
 	}
-
-	// If CAS line is low, set current column instead
-	else	ms->lcd_cas = val;
-
 }
 
 
@@ -123,49 +128,31 @@ void writeLCD(MSHW* ms, uint16_t newaddr, uint8_t val, int lcdnum)
 uint8_t readLCD(MSHW* ms, uint16_t newaddr, int lcdnum)
 {
 	uint8_t *lcd_ptr;
-	if (lcdnum == MS_LCD_LEFT) lcd_ptr = ms->lcd_dat1bit;
+	uint8_t ret;
+
+	if (lcdnum == LCD_L) lcd_ptr = ms->lcd_dat1bit;
 	/* XXX: Fix the use of this magic number, replace with a const */
 	else lcd_ptr = &ms->lcd_dat1bit[4800];
-	if (!lcd_ptr) return 0;
 
+	/* XXX: This might need to be reworked to use non-viewable LCD memory */
 	// Wraps memory address if out of bounds
-	while (newaddr >= 240) newaddr -= 240;
+	if (newaddr >= 240) newaddr %= 240;
 
 	// Check CAS bit on P2
-	if (ms->io[2] & 8)
+	if (ms->io[MISC2] & 8)
 	{
 		// Return data on currently selected LCD column
-		return lcd_ptr[newaddr + (ms->lcd_cas * 240)];
+		ret = lcd_ptr[newaddr + (ms->lcd_cas * 240)];
+	} else {
+		// Not sure what this normally returns when CAS bit low!
+		ret = ms->lcd_cas;
 	}
 
-	// Not sure what this normally returns when CAS bit low!
-	else return ms->lcd_cas;
+	log_debug(" * LCD%s R [%04X] -> %02X\n",
+	  lcdnum == LCD_L ? "_L" : "_R", newaddr, ret);
 
+	return ret;
 }
-
-
-/* Read a uint8_t from the RAM buffer
- *
- * TODO: Add a debug hook here
- */
-uint8_t readRAM(MSHW* ms, unsigned int translated_addr)
-{
-	uint8_t val = ms->ram[translated_addr];
-	log_debug(" * RAM READ  [%04X] -> %02X\n", translated_addr, val);
-	return val;
-}
-
-/* Write a uint8_t to the RAM buffer
- *
- * TODO: Add a debug hook here
- */
-void writeRAM(MSHW* ms, unsigned int translated_addr, uint8_t val)
-{
-	log_debug(" * RAM WRITE [%04X] <- %02X\n", translated_addr, val);
-	ms->ram[translated_addr] = val;
-}
-
-
 
 /* z80ex Read memory callback function.
  *
@@ -173,89 +160,78 @@ void writeRAM(MSHW* ms, unsigned int translated_addr, uint8_t val)
  * This function needs to figure out what slot the requested address lies in,
  * figure out what page of which device is in that slot, and return data.
  *
- * We also need to translate the address requested to the correct offset of the
- * slotted page of the requested device.
  */
-/* XXX: Can the current page/device logic be cleaned up to flow better? */
 Z80EX_BYTE z80ex_mread(
 	Z80EX_CONTEXT *cpu,
 	Z80EX_WORD addr,
 	int m1_state,
 	void *user_data)
 {
-	uint16_t newaddr = 0;
-	uint8_t current_page = 0;
-	uint8_t current_device = 0;
+
+	Z80EX_BYTE ret;
 	MSHW* ms = (MSHW*)user_data;
+	int slot = ((addr & 0xC000) >> 14);
+	int dev = 0xFF;
 
-	// Slot 0x0000 - always codeflash page 0
-	if (addr < 0x4000) return readCodeFlash(ms, addr);
-
-	// Slot 0xC000 - always RAM page 0
-	if (addr >= 0xC000) return readRAM(ms, addr-0xC000);
-
-	// Slot 0x4000
-	if (addr >= 0x4000 && addr < 0x8000)
-	{
-		newaddr = addr - 0x4000;
-		current_page = ms->slot4000_page;
-		current_device = ms->slot4000_device;
-	}
-
-	// Slot 0x8000
-	if (addr >= 0x8000 && addr < 0xC000)
-	{
-		newaddr = addr - 0x8000;
-		current_page = ms->slot8000_page;
-		current_device = ms->slot8000_device;
-	}
-
-	unsigned int translated_addr = newaddr + (current_page * 0x4000);
-
-	/* NOTE: It appears that some times the mailstation will emit a
-	 * current device > 0xF. It appears the upper 4 bits are dontcares
-	 * to the slot handling logic.
+	/* slot4 and slot8 are dynamic, if the requested address falls
+	 * in this range, then we need to set up the device we're going
+	 * to talk to. The other two slots are hard-coded and the dev/page
+	 * information is unused there.
+	 *
+	 * NOTE: It _might_ be possible to optimize this away in the future.
+	 * NOTE: The SLOTX_DEV is stored in the PORT buffer with the upper
+	 * 4 bits set, this can screw up our logic here. The reason for the
+	 * bits being set is unknown at this time.
 	 */
-	switch (current_device & 0x0F)	{
-	  case CF: /* Codeflash */
-		if (current_page >= 64) {
-			log_error("[%04X] * INVALID CODEFLASH PAGE: %d\n",
-			  z80ex_get_reg(cpu, regPC),current_page);
-		}
-		return readCodeFlash(ms, translated_addr);
+	switch (slot) {
+	  case 0:
+		dev = CF;
+		break;
+	  /* TODO: Add page range check */
+	  case 1:
+		dev = (ms->io[SLOT4_DEV] & 0x0F);
+		break;
+	  case 2:
+		dev = (ms->io[SLOT8_DEV] & 0x0F);
+		break;
+	  case 3:
+		dev = RAM;
+		break;
+	}
 
-	  case RAM: /* Dataflash */
-		if (current_page >= 8) {
-			log_error("[%04X] * INVALID RAM PAGE: %d\n",
-			  z80ex_get_reg(cpu, regPC), current_page);
-		}
-		return readRAM(ms, translated_addr);
 
-	  case LCD_L: /* LCD, left side */
-		return readLCD(ms, newaddr, MS_LCD_LEFT);
+	switch (dev) {
+	  /* Right now, readLCD() needs an addr & 0x3FFF.
+	   * This falls within the range of the buffer regardless of the slot
+	   * the actual device is in.
+	   *
+	   * Unlike the write path, reading from dataflash doesn't require an
+	   * external call and can be handled like CF or RAM.
+	   */
+	  case LCD_L:
+	  case LCD_R:
+		ret = readLCD(ms, (addr - (slot << 14)), dev);
+		break;
 
-	  case DF: /* Dataflash */
-		if (current_page >= 32) {
-			log_error("[%04X] * INVALID DATAFLASH PAGE: %d\n",
-			  z80ex_get_reg(cpu, regPC), current_page);
-		}
-		return readDataflash(ms, translated_addr);
+	  case MODEM:
+		ret = 0;
+		log_debug(" * MODEM R is not supported\n");
+		break;
 
-	  case LCD_R: /* LCD, right side */
-		return readLCD(ms, newaddr, MS_LCD_RIGHT);
-
-	  case MODEM: /* MODEM */
-		log_debug("[%04X] * READ FROM MODEM UNSUPPORTED: %04X\n",
-		  z80ex_get_reg(cpu, regPC), newaddr);
+	  case CF:
+	  case DF:
+	  case RAM:
+		ret = *(uint8_t *)(ms->slot_map[slot] + (addr & 0x3FFF));
+		log_debug(" * MEM   R [%04X] -> %02X\n", addr, ret);
 		break;
 
 	  default:
-		log_error("[%04X] * READ FROM UNKNOWN DEVICE: %d\n",
-		  z80ex_get_reg(cpu, regPC), current_device);
+		log_error(" * MEM   R [%04X] FROM INVALID DEV %02X\n", addr, dev);
+		ret = 0;
 		break;
 	}
 
-	return 0;
+	return ret;
 }
 
 
@@ -264,101 +240,80 @@ Z80EX_BYTE z80ex_mread(
  * Write a uint8_t to the address given to us.
  * This function needs to figure out what slot the requested address lies in,
  * figure out what page of which device is in that slot, and return data.
- *
- * We also need to translate the address requested to the correct offset of the
- * slotted page of the requested device.
  */
-/* XXX: Can the current page/device logic be cleaned up to flow better? */
 void z80ex_mwrite(
 	Z80EX_CONTEXT *cpu,
 	Z80EX_WORD addr,
 	Z80EX_BYTE val,
 	void *user_data)
 {
-	uint16_t newaddr = 0;
-	uint8_t current_page = 0;
-	uint8_t current_device = 0;
-	uint32_t translated_addr;
+
 	MSHW* ms = (MSHW*)user_data;
+	int slot = ((addr & 0xC000) >> 14);
+	int dev = 0xFF, page = 0xFF;
 
-
-	// Slot 0x0000 - always codeflash page 0
-	if (addr < 0x4000)
-	{
-		log_error("[%04X] * CAN'T WRITE TO CODEFLASH SLOT 0: 0x%X\n",
-		  z80ex_get_reg(cpu, regPC), addr);
-		return;
-	}
-
-	// Slot 0xC000 - always RAM page 0
-	if (addr >= 0xC000)
-	{
-		newaddr = addr - 0xC000;
-		writeRAM(ms, newaddr, val);
-		return;
-	}
-
-	// Slot 0x4000
-	if (addr >= 0x4000 && addr < 0x8000)
-	{
-		newaddr = addr - 0x4000;
-		current_page = ms->slot4000_page;
-		current_device = ms->slot4000_device;
-	}
-
-	// Slot 0x8000
-	if (addr >= 0x8000 && addr < 0xC000)
-	{
-		newaddr = addr - 0x8000;
-		current_page = ms->slot8000_page;
-		current_device = ms->slot8000_device;
-	}
-
-	translated_addr = newaddr + (current_page * 0x4000);
-
-
-	/* NOTE: While the read path seems to have the situation where the
-	 * upper 4 bits of "current device" are set, I've never seen that be
-	 * a problem here. Regardless, still mask those off.
+	/* slot4 and slot8 are dynamic, if the requested address falls
+	 * in this range, then we need to set up the device we're going
+	 * to talk to. The other two slots are hard-coded and the dev/page
+	 * information is unused there.
+	 *
+	 * NOTE: It _might_ be possible to optimize this away in the future.
+	 * NOTE: The SLOTX_DEV is stored in the PORT buffer with the upper
+	 * 4 bits set, this can screw up our logic here. The reason for the
+	 * bits being set is unknown at this time.
 	 */
-	switch(current_device & 0x0F) {
-	  case CF: /* Codeflash */
-		log_error("[%04X] * WRITE TO CODEFLASH UNSUPPORTED\n",
-		  z80ex_get_reg(cpu, regPC));
+	switch (slot) {
+	  case 0:
+		dev = CF;
+		page = 0;
+		break;
+	  /* TODO: Add page range check */
+	  case 1:
+		dev = (ms->io[SLOT4_DEV] & 0x0F);
+		page = ms->io[SLOT4_PAGE];
+		break;
+	  case 2:
+		dev = (ms->io[SLOT8_DEV] & 0x0F);
+		page = ms->io[SLOT8_PAGE];
+		break;
+	  case 3:
+		dev = RAM;
+		page = 0;
+		break;
+	}
+
+
+	switch (dev) {
+	  /* Right now, writeLCD() and writeDataflash() need an addr & 0x3FFF.
+	   * This falls within the range of the buffer regardless of the slot
+	   * the actual device is in. Since slots are paged, the final address
+	   * passed to writeDataflash() is offset by page_sz * page_num
+	   */
+	  case LCD_L:
+	  case LCD_R:
+		writeLCD(ms, (addr - (slot << 14)), val, dev);
+		break;
+	  case DF:
+		ms->dataflash_updated = writeDataflash(ms,
+		  ((addr - (slot << 14)) + (0x4000 * page)), val);
 		break;
 
-	  case RAM: /* RAM */
-		if (current_page >= 8) {
-			log_error("[%04X] * INVALID RAM PAGE: %d\n",
-			  z80ex_get_reg(cpu, regPC), current_page);
-		}
-		writeRAM(ms, translated_addr, val);
+	  case MODEM:
+		log_debug(" * MODEM W is not supported\n");
 		break;
 
-	  case LCD_L: /* LCD, left side */
-		writeLCD(ms, newaddr, val, MS_LCD_LEFT);
+	  case RAM:
+		*(uint8_t *)(ms->slot_map[slot] + (addr & 0x3FFF)) = val;
+		log_debug(" * MEM   W [%04X] <- %02X\n", addr, val);
 		break;
 
-	  case DF: /* Dataflash */
-		if (current_page >= 32) {
-			log_error("[%04X] * INVALID DATAFLASH PAGE: %d\n",
-			  z80ex_get_reg(cpu, regPC), current_page);
-		}
-		ms->dataflash_updated = writeDataflash(ms, translated_addr, val);
-		break;
-
-	  case LCD_R: /* LCD, right side */
-		writeLCD(ms, newaddr, val, MS_LCD_RIGHT);
-		break;
-
-	  case MODEM: /* MODEM */
-		log_debug("[%04X] WRITE TO MODEM UNSUPPORTED: %04X %02X\n",
-		  z80ex_get_reg(cpu, regPC), newaddr, val);
+	  case CF:
+		log_error(" * CF    W [%04X] INVALID, CANNOT W TO CF\n",
+		  addr);
 		break;
 
 	  default:
-		log_error("[%04X] * WRITE TO UNKNOWN DEVICE: %d\n",
-		  z80ex_get_reg(cpu, regPC), current_device);
+		log_error(" * MEM   W [%04X] TO INVALID DEV %02X\n", addr, dev);
 		break;
 	}
 }
@@ -400,7 +355,7 @@ Z80EX_BYTE z80ex_pread (
 	/* z80ex sets the upper bits of the port address, we don't want that */
 	port &= 0xFF;
 
-	log_debug(" * IO  READ  [  %02X] -> %02X\n", port, ms->io[port]);
+	log_debug(" * IO    R [  %02X] -> %02X\n", port, ms->io[port]);
 
 	switch (port) {
 	  case KEYBOARD:// emulate keyboard matrix output
@@ -433,48 +388,47 @@ Z80EX_BYTE z80ex_pread (
 		break;
 
 	  // These are all for the RTC
-	  case RTC_SEC: //seconds
+	  case RTC_SEC:		//seconds
 		ret = (hex2bcd(rtc_time->tm_sec) & 0x0F);
 		break;
-	  case RTC_10SEC: //10 seconds
+	  case RTC_10SEC:	//10 seconds
 		ret = ((hex2bcd(rtc_time->tm_sec) & 0xF0) >> 4);
 		break;
-	  case RTC_MIN: // minutes
+	  case RTC_MIN:		// minutes
 		ret = (hex2bcd(rtc_time->tm_min) & 0x0F);
 		break;
-	  case RTC_10MIN: // 10 minutes
+	  case RTC_10MIN:	// 10 minutes
 		ret = ((hex2bcd(rtc_time->tm_min) & 0xF0) >> 4);
 		break;
-	  case RTC_HR: // hours
+	  case RTC_HR:		// hours
 		ret = (hex2bcd(rtc_time->tm_hour) & 0x0F);
 		break;
-	  case RTC_10HR: // 10 hours
+	  case RTC_10HR:	// 10 hours
 		ret = ((hex2bcd(rtc_time->tm_hour) & 0xF0) >> 4);
 		break;
-	  case RTC_DOW: // day of week
+	  case RTC_DOW:		// day of week
 		ret = rtc_time->tm_wday;
 		break;
-	  case RTC_DOM: // days
+	  case RTC_DOM:		// days
 		ret = (hex2bcd(rtc_time->tm_mday) & 0x0F);
 		break;
-	  case RTC_10DOM: // 10 days
+	  case RTC_10DOM:	// 10 days
 		ret = ((hex2bcd(rtc_time->tm_mday) & 0xF0) >> 4);
 		break;
-	  case RTC_MON: // months
+	  case RTC_MON:		// months
 		ret = (hex2bcd(rtc_time->tm_mon + 1) & 0x0F);
 		break;
-	  case RTC_10MON: // 10 months
+	  case RTC_10MON:	// 10 months
 		ret = ((hex2bcd(rtc_time->tm_mon + 1) & 0xF0) >> 4);
 		break;
-	  case RTC_YR: // years
+	  case RTC_YR:		// years since 1980
 		ret = (hex2bcd(rtc_time->tm_year + 80) & 0x0F);
 		break;
-	  case RTC_10YR: // 10 years
+	  case RTC_10YR:	// 10s years since 1980
 		ret = ((hex2bcd(rtc_time->tm_year + 80) & 0xF0) >> 4);
 		break;
 
 	  default:
-		//printf("* UNKNOWN IO <- %04X - %02X\n",addr, ms.io[addr]);
 		ret = ms->io[port];
 		break;
 	}
@@ -508,9 +462,7 @@ void z80ex_pwrite (
 	/* z80ex sets the upper bits of the port address, we don't want that */
 	port &= 0xFF;
 
-	log_debug(" * IO  WRITE [  %02X] <- %02X\n", port, val);
-
-	//if (port < 5 || port > 8) printf("* IO -> %04X - %02X\n",port, val);
+	log_debug(" * IO    W [  %02X] <- %02X\n", port, val);
 
 	switch (port) {
 	  case MISC2:
@@ -532,28 +484,30 @@ void z80ex_pwrite (
 		ms->io[port] = val;
 		break;
 
-	  // set slot4000 page
+	  /* For each slot, recalculate the slot_map from the now set device
+	   * and page combination.
+	   *
+	   * NOTE!
+	   * It's been observed that writes of SLOTX_DEV ports, the upper 4
+	   * bits are sometimes set. The meaning of these bits is unknown and
+	   * may just be "dontcare" to the decode logic; so the MS firmware
+	   * does not worry about clearing them when writing the respective
+	   * PORT. It is unknown if not writing the full 8bit value to the PORT
+	   * is problematic. Therefore, when setting up the slot_map we AND
+	   * the lower 4 bits.
+	   */
 	  case SLOT4_PAGE:
-		ms->slot4000_page = val;
-		ms->io[port] = ms->slot4000_page;
-		break;
-
-	  // set slot4000 device
 	  case SLOT4_DEV:
-		ms->slot4000_device = val;
-		ms->io[port] = ms->slot4000_device;
+		ms->io[port] = val;
+		ms->slot_map[1] = ms->dev_map[((ms->io[SLOT4_DEV]) & 0x0F)] +
+		  (ms->io[SLOT4_PAGE] * 0x4000);
 		break;
 
-	  // set slot8000 page
 	  case SLOT8_PAGE:
-		ms->slot8000_page = val;
-		ms->io[port] = ms->slot8000_page;
-		break;
-
-	  // set slot8000 device
 	  case SLOT8_DEV:
-		ms->slot8000_device = val;
-		ms->io[port] = ms->slot8000_device;
+		ms->io[port] = val;
+		ms->slot_map[2] = ms->dev_map[((ms->io[SLOT8_DEV]) & 0x0F)] +
+		  (ms->io[SLOT8_PAGE] * 0x4000);
 		break;
 
 	  // check for hardware power off bit in P28
@@ -658,7 +612,7 @@ Z80EX_BYTE z80ex_dasm_readbyte (
 ) {
 	MSHW* ms = (MSHW*)user_data;
 
-	return ms->codeflash[addr];
+	return *(uint8_t *)(ms->slot_map[((addr & 0xC000) >> 14)] + (addr & 0x3FFF));
 }
 
 //----------------------------------------------------------------------------
@@ -668,10 +622,10 @@ Z80EX_BYTE z80ex_dasm_readbyte (
 void resetMailstation(MSHW* ms)
 {
 	memset(ms->lcd_dat8bit, 0, 320*240);
-	memset(ms->io,0,64 * 1024);
+	memset(ms->io, 0, 64 * 1024);
 	// XXX: Mailstation normally retains RAM I believe.  But Mailstation OS
 	// won't warm-boot properly if we don't erase!  Not sure why yet.
-	memset(ms->ram,0,128 * 1024);
+	memset((uint8_t *)ms->dev_map[RAM], 0, 128 * 1024);
 	ms->power_state = MS_POWERSTATE_ON;
 	ms->interrupt_mask = 0;
 	z80ex_reset(ms->z80);
@@ -783,12 +737,14 @@ int main(int argc, char *argv[])
 	 *
 	 * TODO: Add error checking on the buffer allocation
 	 */
-	ms.codeflash = (uint8_t *)calloc(MEBIBYTE, sizeof(uint8_t));
-	ms.dataflash = (uint8_t *)calloc(MEBIBYTE/2, sizeof(uint8_t));
-	ms.ram = (uint8_t *)calloc(MEBIBYTE/8, sizeof(uint8_t));
+	ms.dev_map[CF] = (uintptr_t)calloc(MEBIBYTE, sizeof(uint8_t));
+	ms.dev_map[DF] = (uintptr_t)calloc(MEBIBYTE/2, sizeof(uint8_t));
+	ms.dev_map[RAM] = (uintptr_t)calloc(MEBIBYTE/8, sizeof(uint8_t));
 	ms.io = (uint8_t *)calloc(MEBIBYTE/16, sizeof(uint8_t));
 	ms.lcd_dat1bit = (uint8_t *)calloc(((MS_LCD_WIDTH * MS_LCD_HEIGHT) / 8),
 	  sizeof(uint8_t));
+	/* XXX: MAGIC NUMBEERRRR */
+	/* ms.dev_map[LCD_R] = ms.dev_map[LCD_L] + 4800; */
 	ms.lcd_dat8bit = (uint8_t *)calloc(  MS_LCD_WIDTH * MS_LCD_HEIGHT,
 	  sizeof(uint8_t));
 
@@ -797,12 +753,16 @@ int main(int argc, char *argv[])
 	ms.lcd_cas = 0;
 	ms.dataflash_updated = 0;
 	ms.interrupt_mask = 0;
-	ms.slot4000_page = 0;
-	ms.slot4000_device = 0;
-	ms.slot8000_page = 0;
-	ms.slot8000_device = 0;
 	ms.power_button = 0;
 	ms.power_state = MS_POWERSTATE_OFF;
+
+	/* Initialize the slot_map */
+	ms.slot_map[0] = ms.dev_map[CF]; /* slot0000 is always CF_0 */
+	ms.slot_map[1] = ms.dev_map[((ms.io[SLOT4_DEV]) & 0x0F)] +
+	  (ms.io[SLOT4_PAGE] * 0x4000);
+	ms.slot_map[2] = ms.dev_map[((ms.io[SLOT8_DEV]) & 0x0F)] +
+	  (ms.io[SLOT8_PAGE] * 0x4000);
+	ms.slot_map[3] = ms.dev_map[RAM]; /* slotC000 is always RAM_0 */
 
 	/* Set up keyboard emulation array */
 	memset(ms.key_matrix, 0xff, sizeof(ms.key_matrix));
@@ -814,7 +774,7 @@ int main(int argc, char *argv[])
 	 * It should never be longer either. If it is, we just pretend like
 	 * we didn't notice. This might be unwise behavior.
 	 */
-	flashtobuf(ms.codeflash, codeflash_path, MEBIBYTE);
+	flashtobuf((uint8_t *)ms.dev_map[CF], codeflash_path, MEBIBYTE);
 
 	/* Open dataflash and dump it in to a buffer.
 	 * The codeflash should be exactly 512 KiB.
@@ -826,7 +786,7 @@ int main(int argc, char *argv[])
 	 * passed, then create a new dataflash in RAM which will get written
 	 * to ./dataflash.bin
 	 */
-	flashtobuf(ms.dataflash, dataflash_path, MEBIBYTE/2);
+	flashtobuf((uint8_t *)ms.dev_map[DF], dataflash_path, MEBIBYTE/2);
 	/* XXX: Check return of this func, create new dataflash image! */
 #if 0
 	if (!ret && !opt_dataflash) {
@@ -897,7 +857,7 @@ int main(int argc, char *argv[])
 						&dasm_tstates, &dasm_tstates2,
 						z80ex_dasm_readbyte,
 						z80ex_get_reg(ms.z80, regPC),
-						0);
+						&ms);
 					log_debug("%-15s  t=%d", dasm_buffer, dasm_tstates);
 					if(dasm_tstates2) {
 						log_debug("/%d", dasm_tstates2);
@@ -925,7 +885,7 @@ int main(int argc, char *argv[])
 
 		/* Write dataflash buffer to disk if it was modified */
 		if (ms.dataflash_updated) {
-			int ret = buftoflash(ms.dataflash, dataflash_path, MEBIBYTE/2);
+			int ret = buftoflash((uint8_t *)ms.dev_map[DF], dataflash_path, MEBIBYTE/2);
 			if (ret != 0) {
 				log_error(
 					"Failed writing dataflash to disk (%s), err 0x%08X\n",

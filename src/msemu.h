@@ -11,15 +11,11 @@
 #define MS_LCD_WIDTH 	320
 #define MS_LCD_HEIGHT	240
 
-// Constants to identify each side of the LCD
-#define MS_LCD_LEFT 	1
-#define MS_LCD_RIGHT 	2
-
 // Power state constants
 #define MS_POWERSTATE_ON  1
 #define MS_POWERSTATE_OFF 0
 
-enum ms_device_map {
+enum ms_dev_map {
 	CF 		= 0x00,
 	RAM 		= 0x01,
 	LCD_L 		= 0x02,
@@ -79,8 +75,11 @@ enum ms_port_map {
 
 typedef struct mshw {
 	Z80EX_CONTEXT* z80;
-	uint8_t *ram;
+
+	uintptr_t slot_map[4];
+
 	uint8_t *io;
+	uintptr_t dev_map[DEV_CNT];
 
 	uint8_t *lcd_dat8bit;
 	/* TODO: Might be able to remove this 1bit screen representation */
@@ -95,15 +94,6 @@ typedef struct mshw {
 
 	// Bits specify which interrupts have been triggered (returned on P3)
 	uint8_t interrupt_mask;
-
-	// Stores the page/device numbers of the two middle 16KB slots of address space
-	uint8_t slot4000_page;
-	uint8_t slot4000_device;
-	uint8_t slot8000_page;
-	uint8_t slot8000_device;
-
-	uint8_t *codeflash;
-	uint8_t *dataflash;
 
 	// Signals if the dataflash contents have been changed.
 	// Should be cleared once dataflash is written back to disk.
