@@ -5,6 +5,9 @@
 
 #include "debug.h"
 #include "msemu.h"
+#include "logger.h"
+
+#include <z80ex/z80ex_dasm.h>
 
 static void leave_prompt(void *nan);
 static void help(void *nan);
@@ -96,4 +99,34 @@ int debug_prompt(MSHW *ms)
 			}
 		}
 	}
+}
+
+Z80EX_BYTE z80ex_dasm_readbyte (Z80EX_WORD addr, void *user_data)
+{
+	MSHW* ms = (MSHW*)user_data;
+	return *(uint8_t *)(ms->slot_map[((addr & 0xC000) >> 14)] +
+	  (addr & 0x3FFF));
+}
+
+void debug_dasm(MSHW *ms)
+{
+        int dasm_buffer_len = 256;
+        char dasm_buffer[dasm_buffer_len];
+        int dasm_tstates = 0;
+        int dasm_tstates2 = 0;
+
+	bzero(&dasm_buffer, dasm_buffer_len);
+	z80ex_dasm(
+	  &dasm_buffer[0], dasm_buffer_len,
+	  0,
+	  &dasm_tstates, &dasm_tstates2,
+	  z80ex_dasm_readbyte,
+	  z80ex_get_reg(ms->z80, regPC),
+	  ms);
+	log_debug("%-15s  t=%d", dasm_buffer, dasm_tstates);
+	if(dasm_tstates2) {
+		log_debug("/%d", dasm_tstates2);
+	}
+	log_debug("\n");
+
 }

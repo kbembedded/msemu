@@ -608,17 +608,6 @@ int process_interrupts (MSHW* ms)
 	return 0;
 }
 
-// Handler for returning the byte for a given address.
-// Used by the disassembler.
-Z80EX_BYTE z80ex_dasm_readbyte (
-	Z80EX_WORD addr,
-	void *user_data
-) {
-	MSHW* ms = (MSHW*)user_data;
-
-	return *(uint8_t *)(ms->slot_map[((addr & 0xC000) >> 14)] + (addr & 0x3FFF));
-}
-
 //----------------------------------------------------------------------------
 //
 //  Resets Mailstation state
@@ -639,7 +628,7 @@ void resetMailstation(MSHW* ms)
 void sigint(int sig)
 {
 	debug_console = 1;
-	printf("Received SIGINT, interrupting\n");
+	printf("\nReceived SIGINT, interrupting\n");
 }
 
 /* Main
@@ -665,12 +654,6 @@ int main(int argc, char *argv[])
 	uint32_t lasttick = SDL_GetTicks();
 	uint32_t currenttick;
 	SDL_Event event;
-
-	// These are for the disassembler
-	int dasm_buffer_len = 256;
-	char dasm_buffer[dasm_buffer_len];
-	int dasm_tstates = 0;
-	int dasm_tstates2 = 0;
 
 	struct sigaction sigact;
 
@@ -891,24 +874,12 @@ int main(int argc, char *argv[])
 			 * own?
 			 * BUG: with breakpoint at PC, might cause issues for
 			 * prefix'ed instructions?
+			 * BUG: Unable to properly handle a breakpoint at 0x0
 			 */
 			if (single_step) {
 				do {
 					if (!silent && !z80ex_last_op_type(ms.z80)){
-						bzero(&dasm_buffer, dasm_buffer_len);
-						log_debug("[%04X] - ", z80ex_get_reg(ms.z80, regPC));
-						z80ex_dasm(
-							&dasm_buffer[0], dasm_buffer_len,
-							0,
-							&dasm_tstates, &dasm_tstates2,
-							z80ex_dasm_readbyte,
-							z80ex_get_reg(ms.z80, regPC),
-							&ms);
-						log_debug("%-15s  t=%d", dasm_buffer, dasm_tstates);
-						if(dasm_tstates2) {
-							log_debug("/%d", dasm_tstates2);
-						}
-						log_debug("\n");
+						debug_dasm(&ms);
 					}
 					tstate_counter += z80ex_step(ms.z80);
 					if (z80ex_get_reg(ms.z80, regPC) == ms.bp) {
@@ -922,20 +893,7 @@ int main(int argc, char *argv[])
 				while (tstate_counter < interrupt_period ||
 				  !z80ex_nmi_possible(ms.z80)) {
 					if (!silent && !z80ex_last_op_type(ms.z80)){
-						bzero(&dasm_buffer, dasm_buffer_len);
-						log_debug("[%04X] - ", z80ex_get_reg(ms.z80, regPC));
-						z80ex_dasm(
-							&dasm_buffer[0], dasm_buffer_len,
-							0,
-							&dasm_tstates, &dasm_tstates2,
-							z80ex_dasm_readbyte,
-							z80ex_get_reg(ms.z80, regPC),
-							&ms);
-						log_debug("%-15s  t=%d", dasm_buffer, dasm_tstates);
-						if(dasm_tstates2) {
-							log_debug("/%d", dasm_tstates2);
-						}
-						log_debug("\n");
+						debug_dasm(&ms);
 					}
 					tstate_counter += z80ex_step(ms.z80);
 					if (z80ex_get_reg(ms.z80, regPC) == ms.bp) {

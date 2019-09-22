@@ -99,6 +99,7 @@ int flashtobuf(uint8_t *buf, const char *file_path, ssize_t sz)
 	}
 }
 
+/* XXX: See if there is a way to only write data that changed? */
 int buftoflash(uint8_t *buf, const char *file_path, ssize_t sz)
 {
 	FILE *fd;

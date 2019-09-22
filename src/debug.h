@@ -18,5 +18,6 @@ struct cmdtable {
 };
 
 int debug_prompt(MSHW *ms);
+void debug_dasm(MSHW *ms);
 
 #endif
