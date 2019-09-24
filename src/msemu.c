@@ -633,8 +633,6 @@ void sigint(int sig)
 
 /* Main
  *
- * TODO:
- *   Support newer SDL versions
  */
 int main(int argc, char *argv[])
 {
@@ -642,7 +640,7 @@ int main(int argc, char *argv[])
 	char *dataflash_path = "dataflash.bin";
 	char* logpath = NULL;
 	int c;
-	int silent = 1;
+	int opt_verbose = 0;
 	int single_step = 0;
 
 	MSHW ms;
@@ -696,22 +694,22 @@ int main(int argc, char *argv[])
 			strncpy(logpath, optarg, strlen(optarg) + 1);
 		  	break;
 		  case 'v':
-			silent = 0;
+			opt_verbose = 1;
 			break;
 		  case 'h':
 		  default:
-			printf("Usage: %s [-s] [-c <path>] [-d <path>] [-l <path>]\n", argv[0]);
+			printf("Usage: %s [-c <path>] [-d <path>] [-l <path>]\n", argv[0]);
 			printf(" -c <path>   | path to codeflash (default: %s)\n", codeflash_path);
 			printf(" -d <path>   | path to dataflash (default: %s)\n", dataflash_path);
 			printf(" -l <path>   | path to log file\n");
-			printf(" -v          | verbose logging\n");
+			printf(" -v          | verbose output to terminal\n");
 			printf(" -h          | show this usage menu\n");
 			return 1;
 		}
 	}
 
 	// Initialize logging
-	log_init(logpath, silent);
+	log_init(logpath, opt_verbose);
 
 	/* Allocate and clear buffers.
 	 * Codeflash is 1 MiB
@@ -786,6 +784,7 @@ int main(int argc, char *argv[])
 
 	/* TODO: Add git tags to this, because thats neat */
 	printf("\nMailstation Emulator v0.1\n");
+	printf("\nPress ctrl+c to enter interactive Mailstation debugger\n");
 
 	ui_init(&raw_cga_array[0], ms.lcd_dat8bit);
 
@@ -815,9 +814,18 @@ int main(int argc, char *argv[])
 	while (!exitemu)
 	{
 		if (debug_console) {
-			single_step = debug_prompt(&ms);
-			debug_console = single_step;
-			/* TODO: Enable verbose output when single stepping? */
+			switch (debug_prompt(&ms)) {
+			  case -1: /* Quit */
+				exitemu = 1;
+			  case 0: /* Continue */
+				debug_console = 0;
+				single_step = 0;
+				break;
+			  case 1: /* Single step */
+				debug_console = 1;
+				single_step = 1;
+				break;
+			}
 		}
 
 		currenttick = SDL_GetTicks();
@@ -860,46 +868,33 @@ int main(int argc, char *argv[])
 			 * we only decode full opcodes for dasm, the
 			 * z80ex_last_op_type() returns a 0 when the last op
 			 * was complete.
-			 */
-
-			/* BUG: Going from single step to run will cause a
-			 * mistimed NMI to occur since we are basing the count
-			 * on real time passing rather than any amount of exec
-			 * time.
-			 */
-			/* TODO: Clean up the call to dasm, can move it to a
-			 * log_* function and handle all of the buffers there
-			 * TODO: Consider moving the entire z80em_step() and
-			 * possible dasm use in to a single function of our
-			 * own?
-			 * BUG: with breakpoint at PC, might cause issues for
-			 * prefix'ed instructions?
-			 * BUG: Unable to properly handle a breakpoint at 0x0
+			 *
+			 * In order to have correct and full simulation, single
+			 * step actions happen here, that way the SDL window
+			 * can be updated, keys can be parsed, etc.
 			 */
 			if (single_step) {
+				log_push(1);
 				do {
-					if (!silent && !z80ex_last_op_type(ms.z80)){
+					if (!z80ex_last_op_type(ms.z80)) {
 						debug_dasm(&ms);
 					}
 					tstate_counter += z80ex_step(ms.z80);
-					if (z80ex_get_reg(ms.z80, regPC) == ms.bp) {
-						debug_console = 1;
-						break;
-					}
 				} while (z80ex_last_op_type(ms.z80));
+				log_pop();
 
 			} else if (execute_counter > 15) {
 				execute_counter = 0;
 				while (tstate_counter < interrupt_period ||
 				  !z80ex_nmi_possible(ms.z80)) {
-					if (!silent && !z80ex_last_op_type(ms.z80)){
+					if (!log_isverbose() && !z80ex_last_op_type(ms.z80)){
 						debug_dasm(&ms);
 					}
-					tstate_counter += z80ex_step(ms.z80);
 					if (z80ex_get_reg(ms.z80, regPC) == ms.bp) {
 						debug_console = 1;
 						break;
 					}
+					tstate_counter += z80ex_step(ms.z80);
 				}
 			}
 
@@ -947,7 +942,6 @@ int main(int argc, char *argv[])
 			}
 
 			/* Emulate power button with F12 key */
-			/* XXX: Figure out why this requires a double press? */
 			if (event.key.keysym.sym == SDLK_F12)
 			{
 				if (event.type == SDL_KEYDOWN)

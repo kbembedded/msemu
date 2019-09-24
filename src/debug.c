@@ -14,16 +14,21 @@ static void help(void *nan);
 static void list_bp(void *nan);
 static void set_bp(void *nan);
 static void examine(void *nan);
+static void force_on(void *nan);
+static void force_off(void *nan);
 
 static MSHW *ms_debug;
 
 static const struct cmdtable cmds[] = {
+	{ "q", 1, leave_prompt, "[Q]uit emulation and exit completely", no_arg },
 	{ "c", 1, leave_prompt, "[C]ontinue execution", no_arg },
 	{ "s", 1, leave_prompt, "[S]ingle step execution", no_arg },
 	{ "h", 1, help, "Display this [H]elp menu", no_arg },
 	{ "l", 1, list_bp, "[L]ist the current breakpoint", no_arg },
 	{ "b", 1, set_bp, "Set a [B]reakpoint on PC, \'b <PC>\', -1 to disable", int_arg },
 	{ "e", 1, examine, "[E]xamine current registers", no_arg },
+	{ "o", 1, force_on, "Force debug printing [O]n during exec", no_arg },
+	{ "f", 1, force_off, "Force debug printing o[F]f during exec", no_arg },
 };
 #define NUMCMDS sizeof cmds / sizeof cmds[0]
 
@@ -37,6 +42,16 @@ static void help(void *nan)
 	int i = NUMCMDS;
 	printf("Available commands:\n");
 	while(i--) printf("%s - %s\n", cmds[i].cmd, cmds[i].doc);
+}
+
+static void force_on(void *nan)
+{
+	log_set(0);
+}
+
+static void force_off(void *nan)
+{
+	log_set(1);
 }
 
 static void set_bp(void *pc)
@@ -83,8 +98,9 @@ int debug_prompt(MSHW *ms)
 		i = NUMCMDS;
 		while (i--) {
 			if(!strncmp(buf, cmds[i].cmd, cmds[i].cmdlen)) {
-				if (i == 0) return 0; /* Hack, "c" */
-				if (i == 1) return 1; /* Hack, "s" */
+				if (i == 0) return -1; /* Hack, "q" */
+				if (i == 1) return 0;  /* Hack, "c" */
+				if (i == 2) return 1;  /* Hack, "s" */
 				switch (cmds[i].arg) {
 				  case no_arg:
 					cmds[i].func(0);
