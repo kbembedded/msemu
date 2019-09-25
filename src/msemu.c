@@ -12,11 +12,13 @@
 #include <fcntl.h>
 #include <time.h>
 #include <unistd.h>
+#include <signal.h>
 #include "rawcga.h"
 #include "logger.h"
 #include "msemu.h"
 #include "flashops.h"
 #include "ui.h"
+#include "debug.h"
 
 #include <SDL/SDL.h>
 #include <SDL/SDL_rotozoom.h>
@@ -26,6 +28,8 @@
 // Default entry of color palette to draw Mailstation LCD with
 uint8_t LCD_fg_color = 3;  // LCD black
 uint8_t LCD_bg_color = 2;  // LCD green
+
+int debug_console;
 
 // This table translates PC scancodes to the Mailstation key matrix
 int32_t keyTranslateTable[10][8] = {
@@ -604,17 +608,6 @@ int process_interrupts (MSHW* ms)
 	return 0;
 }
 
-// Handler for returning the byte for a given address.
-// Used by the disassembler.
-Z80EX_BYTE z80ex_dasm_readbyte (
-	Z80EX_WORD addr,
-	void *user_data
-) {
-	MSHW* ms = (MSHW*)user_data;
-
-	return *(uint8_t *)(ms->slot_map[((addr & 0xC000) >> 14)] + (addr & 0x3FFF));
-}
-
 //----------------------------------------------------------------------------
 //
 //  Resets Mailstation state
@@ -629,27 +622,17 @@ void resetMailstation(MSHW* ms)
 	ms->power_state = MS_POWERSTATE_ON;
 	ms->interrupt_mask = 0;
 	z80ex_reset(ms->z80);
+}
 
-	// Mailstation seems to expect registers to be initialized to zero,
-	// so we set them all to zero here to be safe.
-	z80ex_set_reg(ms->z80, regAF, 0);
-	z80ex_set_reg(ms->z80, regAF_, 0);
-	z80ex_set_reg(ms->z80, regBC, 0);
-	z80ex_set_reg(ms->z80, regBC_, 0);
-	z80ex_set_reg(ms->z80, regDE, 0);
-	z80ex_set_reg(ms->z80, regDE_, 0);
-	z80ex_set_reg(ms->z80, regHL, 0);
-	z80ex_set_reg(ms->z80, regHL_, 0);
-	z80ex_set_reg(ms->z80, regIX, 0);
-	z80ex_set_reg(ms->z80, regIY, 0);
-	z80ex_set_reg(ms->z80, regSP, 0);
-	z80ex_set_reg(ms->z80, regPC, 0);
+/* Debug support */
+void sigint(int sig)
+{
+	debug_console = 1;
+	printf("\nReceived SIGINT, interrupting\n");
 }
 
 /* Main
  *
- * TODO:
- *   Support newer SDL versions
  */
 int main(int argc, char *argv[])
 {
@@ -657,22 +640,20 @@ int main(int argc, char *argv[])
 	char *dataflash_path = "dataflash.bin";
 	char* logpath = NULL;
 	int c;
-	int silent = 1;
+	int opt_verbose = 0;
+	int single_step = 0;
 
 	MSHW ms;
 	int execute_counter = 0;
 	int tstate_counter = 0;
+	/* XXX: interrupt_period can change if running at different freq */
 	int interrupt_period = 187500;
 	int exitemu = 0;
 	uint32_t lasttick = SDL_GetTicks();
 	uint32_t currenttick;
 	SDL_Event event;
 
-	// These are for the disassembler
-	int dasm_buffer_len = 256;
-	char dasm_buffer[dasm_buffer_len];
-	int dasm_tstates = 0;
-	int dasm_tstates2 = 0;
+	struct sigaction sigact;
 
 	static struct option long_opts[] = {
 	  { "help", no_argument, NULL, 'h' },
@@ -680,6 +661,9 @@ int main(int argc, char *argv[])
 	  { "dataflash", required_argument, NULL, 'd' },
 	  { "logfile", optional_argument, NULL, 'l' },
 	  { "verbose", no_argument, NULL, 'v' },
+	/* TODO: Add argument to start with debug console open, e.g. execution
+	 * halted.
+	 */
 	  { NULL, no_argument, NULL, 0}
 	};
 
@@ -710,22 +694,22 @@ int main(int argc, char *argv[])
 			strncpy(logpath, optarg, strlen(optarg) + 1);
 		  	break;
 		  case 'v':
-			silent = 0;
+			opt_verbose = 1;
 			break;
 		  case 'h':
 		  default:
-			printf("Usage: %s [-s] [-c <path>] [-d <path>] [-l <path>]\n", argv[0]);
+			printf("Usage: %s [-c <path>] [-d <path>] [-l <path>]\n", argv[0]);
 			printf(" -c <path>   | path to codeflash (default: %s)\n", codeflash_path);
 			printf(" -d <path>   | path to dataflash (default: %s)\n", dataflash_path);
 			printf(" -l <path>   | path to log file\n");
-			printf(" -v          | verbose logging\n");
+			printf(" -v          | verbose output to terminal\n");
 			printf(" -h          | show this usage menu\n");
 			return 1;
 		}
 	}
 
 	// Initialize logging
-	log_init(logpath, silent);
+	log_init(logpath, opt_verbose);
 
 	/* Allocate and clear buffers.
 	 * Codeflash is 1 MiB
@@ -755,6 +739,7 @@ int main(int argc, char *argv[])
 	ms.interrupt_mask = 0;
 	ms.power_button = 0;
 	ms.power_state = MS_POWERSTATE_OFF;
+	ms.bp = -1;
 
 	/* Initialize the slot_map */
 	ms.slot_map[0] = ms.dev_map[CF]; /* slot0000 is always CF_0 */
@@ -799,6 +784,7 @@ int main(int argc, char *argv[])
 
 	/* TODO: Add git tags to this, because thats neat */
 	printf("\nMailstation Emulator v0.1\n");
+	printf("\nPress ctrl+c to enter interactive Mailstation debugger\n");
 
 	ui_init(&raw_cga_array[0], ms.lcd_dat8bit);
 
@@ -816,6 +802,10 @@ int main(int argc, char *argv[])
 	 * there is any reason to need this.
 	 */
 
+	/* Override ctrl+c to drop to debug console */
+	sigact.sa_handler = sigint;
+	sigaction(SIGINT, &sigact, NULL);
+
 	// Display startup message
 	powerOff(&ms);
 
@@ -823,6 +813,21 @@ int main(int argc, char *argv[])
 
 	while (!exitemu)
 	{
+		if (debug_console) {
+			switch (debug_prompt(&ms)) {
+			  case -1: /* Quit */
+				exitemu = 1;
+			  case 0: /* Continue */
+				debug_console = 0;
+				single_step = 0;
+				break;
+			  case 1: /* Single step */
+				debug_console = 1;
+				single_step = 1;
+				break;
+			}
+		}
+
 		currenttick = SDL_GetTicks();
 
 		/* Let the Z80 process code at regular intervals */
@@ -844,32 +849,60 @@ int main(int argc, char *argv[])
 			 */
 			execute_counter += currenttick - lasttick;
 
-			// The op code check is to verify we're not in the middle of
-			// processing a prefix opcode. We need to completely process
-			// these instructions before handling interrupts.
-			while (tstate_counter < interrupt_period || z80ex_last_op_type(ms.z80)){
-				if (!silent){
-					memset(&dasm_buffer, 0, dasm_buffer_len);
-					log_debug("[%04X] - ", z80ex_get_reg(ms.z80, regPC));
-					z80ex_dasm(
-						&dasm_buffer[0], dasm_buffer_len,
-						0,
-						&dasm_tstates, &dasm_tstates2,
-						z80ex_dasm_readbyte,
-						z80ex_get_reg(ms.z80, regPC),
-						&ms);
-					log_debug("%-15s  t=%d", dasm_buffer, dasm_tstates);
-					if(dasm_tstates2) {
-						log_debug("/%d", dasm_tstates2);
+			/* This loop is our real-time gating. The only reason
+			 * this loop should exit is:
+			 * We're single stepping
+			 * To process an NMI (every 64 Hz)
+			 *
+			 * Once we process an interrupt, stall execution
+			 * until the interrupt would have happened realtime.
+			 * This is based on CPU execution speed, default is
+			 * 12 MHz but can be changed on the fly via a port wr.
+			 *
+			 * Due to how z80ex processes steps, after a call to
+			 * z80ex_step() it might not be possible to NMI, if
+			 * thats the case, keep stepping until an NMI is
+			 * possible.
+			 *
+			 * This step process also means we need to ensure
+			 * we only decode full opcodes for dasm, the
+			 * z80ex_last_op_type() returns a 0 when the last op
+			 * was complete.
+			 *
+			 * In order to have correct and full simulation, single
+			 * step actions happen here, that way the SDL window
+			 * can be updated, keys can be parsed, etc.
+			 */
+			if (single_step) {
+				log_push(1);
+				do {
+					if (!z80ex_last_op_type(ms.z80)) {
+						debug_dasm(&ms);
 					}
-					log_debug("\n");
-				}
+					tstate_counter += z80ex_step(ms.z80);
+				} while (z80ex_last_op_type(ms.z80));
+				log_pop();
 
-				tstate_counter += z80ex_step(ms.z80);
+			} else if (execute_counter > 15) {
+				execute_counter = 0;
+				while (tstate_counter < interrupt_period ||
+				  !z80ex_nmi_possible(ms.z80)) {
+					if (!log_isverbose() && !z80ex_last_op_type(ms.z80)){
+						debug_dasm(&ms);
+					}
+					if (z80ex_get_reg(ms.z80, regPC) == ms.bp) {
+						debug_console = 1;
+						break;
+					}
+					tstate_counter += z80ex_step(ms.z80);
+				}
 			}
 
-			tstate_counter += process_interrupts(&ms);
-			tstate_counter %= interrupt_period;
+			if (tstate_counter >= interrupt_period) {
+				tstate_counter += process_interrupts(&ms);
+				tstate_counter %= interrupt_period;
+			}
+
 		}
 
 		/* Update LCD if modified (at 20ms rate) */
@@ -909,7 +942,6 @@ int main(int argc, char *argv[])
 			}
 
 			/* Emulate power button with F12 key */
-			/* XXX: Figure out why this requires a double press? */
 			if (event.key.keysym.sym == SDLK_F12)
 			{
 				if (event.type == SDL_KEYDOWN)
