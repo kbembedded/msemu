@@ -230,7 +230,8 @@ Z80EX_BYTE z80ex_mread(
 		break;
 
 	  default:
-		log_error(" * MEM   R [%04X] FROM INVALID DEV %02X\n", addr, dev);
+		log_error(" * MEM   R [%04X] FROM INVALID DEV %02X @ %04X\n",
+		  addr, dev, z80ex_get_reg(ms->z80, regPC));
 		ret = 0;
 		break;
 	}
@@ -312,12 +313,13 @@ void z80ex_mwrite(
 		break;
 
 	  case CF:
-		log_error(" * CF    W [%04X] INVALID, CANNOT W TO CF\n",
-		  addr);
+		log_error(" * CF    W [%04X] INVALID, CANNOT W TO CF @ %04X\n",
+		  addr, z80ex_get_reg(ms->z80, regPC));
 		break;
 
 	  default:
-		log_error(" * MEM   W [%04X] TO INVALID DEV %02X\n", addr, dev);
+		log_error(" * MEM   W [%04X] TO INVALID DEV %02X\n @ %04X",
+		  addr, dev), z80ex_get_reg(ms->z80, regPC);
 		break;
 	}
 }
