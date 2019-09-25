@@ -785,7 +785,7 @@ int main(int argc, char *argv[])
 
 
 	/* TODO: Add git tags to this, because thats neat */
-	printf("\nMailstation Emulator v0.1\n");
+	printf("\nMailstation Emulator v0.2\n");
 	printf("\nPress ctrl+c to enter interactive Mailstation debugger\n");
 
 	ui_init(&raw_cga_array[0], ms.lcd_dat8bit);
