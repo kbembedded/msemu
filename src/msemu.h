@@ -11,18 +11,75 @@
 #define MS_LCD_WIDTH 	320
 #define MS_LCD_HEIGHT	240
 
-// Constants to identify each side of the LCD
-#define MS_LCD_LEFT 	1
-#define MS_LCD_RIGHT 	2
-
 // Power state constants
 #define MS_POWERSTATE_ON  1
 #define MS_POWERSTATE_OFF 0
 
+enum ms_dev_map {
+	CF 		= 0x00,
+	RAM 		= 0x01,
+	LCD_L 		= 0x02,
+	DF 		= 0x03,
+	LCD_R 		= 0x04,
+	MODEM 		= 0x05,
+
+	DEV_CNT,
+};
+
+enum ms_port_map {
+	KEYBOARD	= 0x01,
+	MISC2		= 0x02,
+		/*	p3.7 = Caller id handler
+			p3.5 = maybe rtc???
+			p3.6 = Modem handler
+			p3.4 = increment time16
+			p3.3 = null
+			p3.0 = null
+			p3.1 = Keyboard handler
+			p3.2 = null
+		*/
+	IRQ_MASK	= 0x03,
+	UNKNOWN0x4	= 0x04,
+	SLOT4_PAGE	= 0x05,
+	SLOT4_DEV	= 0x06,
+	SLOT8_PAGE	= 0x07,
+	SLOT8_DEV	= 0x08,
+	MISC9		= 0x09, /* Printer ctrl, pwr ok, pwr btn */
+	RTC_SEC		= 0x10, /* BCD, ones place seconds */
+	RTC_10SEC	= 0x11, /* BCD, tens place seconds */
+	RTC_MIN		= 0x12, /* BCD, ones place minutes */
+	RTC_10MIN	= 0x13, /* BCD, tens place minutes */
+	RTC_HR		= 0x14, /* BCD, ones place hours */
+	RTC_10HR	= 0x15, /* BCD, tens place hours */
+	RTC_DOW		= 0x16, /* BCD, day of week */
+	RTC_DOM		= 0x17, /* BCD, ones place day of month */
+	RTC_10DOM	= 0x18, /* BCD, tens place day of month */
+	RTC_MON		= 0x19, /* BCD, ones place month */
+	RTC_10MON	= 0x1A, /* BCD, tens place month */
+	RTC_YR		= 0x1B, /* BCD, ones place years since 1980 */
+	RTC_10YR	= 0x1C, /* BCD, tens place years since 1980 */
+	RTC_CTRL1	= 0x1D, /* Unknown */
+	RTC_CTRL2	= 0x1E, /* Unknown */
+	RTC_CTRL3	= 0x1F, /* Unknown */
+
+	PRINT_STATUS	= 0x21, /* Unknown */
+	PRINT_DDR	= 0x2C,
+	PRINT_DR	= 0x2D,
+
+	UNKNOWN0x28	= 0x28,
+
+	PORT_CNT	= 0x10000, /* XXX: Currently 64 KiB is used, not sure
+				    * what the actual needed amount is.
+				    */
+};
+
 typedef struct mshw {
 	Z80EX_CONTEXT* z80;
-	uint8_t *ram;
+
+	uintptr_t slot_map[4];
+
 	uint8_t *io;
+	uintptr_t dev_map[DEV_CNT];
 
 	uint8_t *lcd_dat8bit;
 	/* TODO: Might be able to remove this 1bit screen representation */
@@ -37,15 +94,6 @@ typedef struct mshw {
 
 	// Bits specify which interrupts have been triggered (returned on P3)
 	uint8_t interrupt_mask;
-
-	// Stores the page/device numbers of the two middle 16KB slots of address space
-	uint8_t slot4000_page;
-	uint8_t slot4000_device;
-	uint8_t slot8000_page;
-	uint8_t slot8000_device;
-
-	uint8_t *codeflash;
-	uint8_t *dataflash;
 
 	// Signals if the dataflash contents have been changed.
 	// Should be cleared once dataflash is written back to disk.
