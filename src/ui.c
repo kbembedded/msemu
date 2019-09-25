@@ -209,9 +209,7 @@ void ui_drawSplashScreen()
 	}
 
 	printstring_centered(screen, "Mailstation Emulator", 4 * 8);
-	printstring_centered(screen, "v0.1a", 5 * 8);
-	printstring_centered(screen, "Created by Jeff Bowman", 8 * 8);
-	printstring_centered(screen, "(fyberoptic@gmail.com)", 9 * 8);
+	printstring_centered(screen, "v0.2", 5 * 8);
 	printstring_centered(screen, "F12 to Start", 15 * 8);
 
 	SDL_Flip(screen);
