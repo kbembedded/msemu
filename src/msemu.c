@@ -567,21 +567,30 @@ void generateKeyboardMatrix(MSHW* ms, int scancode, int eventtype)
 	}
 }
 
-/* z80ex emulation requires that intread callback be defined.
- * As far as is known, there is no INT used on the Mailsattion. The only IRQs
- * are NMI for timers, which launch other handlers from there. If the error
- * below is ever encountered, that means that this actually is used somewhere.
+/* z80ex emulation requires that intread callback be defined. Used for IM 2.
+ * Under normal execution, IM 2 is not used, however, some of the hacks used
+ * for installing a custom interrupt handler use IM 2. For these to work, we
+ * must provide intread capability. In theory, the return data should be fully
+ * random as in real hardware these pins all go high impedance with no pull
+ * resistors.
  */
 Z80EX_BYTE z80ex_intread (
 	Z80EX_CONTEXT *cpu,
 	void *user_data)
 {
-	log_error("z80ex_intread is not implemented.");
-	abort();
+	return 0x00;
 }
 
-// Processes interrupts. Should be called on every interrupt period.
-// Returns number of tstates spent processing interrupt.
+/* Processes interrupts. Should be called on every interrupt period.
+ * Returns number of tstates spent processing interrupt.
+ *
+ * NOTE: It is unknown if an NMI ever occurs on the Mailstation at this time.
+ * Disassembly of the firmware yields no calls to RETN, however the code at
+ * 0x0066 is set up to handle an NMI. That is, 0x0065 is a NOP since the opcode
+ * at 0x0066 is the start of a jump. If the jump were to start at 0x0065 then
+ * 0x0066 would not have a valid instruction. This hints that there is some
+ * expectation of an NMI occurring.
+ */
 int process_interrupts (MSHW* ms)
 {
 	static int icount = 0;
@@ -595,7 +604,7 @@ int process_interrupts (MSHW* ms)
 		if (ms->io[3] & 0x10 && !(ms->interrupt_mask & 0x10))
 		{
 			ms->interrupt_mask |= 0x10;
-			return z80ex_nmi(ms->z80);
+			return z80ex_int(ms->z80);
 		}
 	}
 
@@ -603,7 +612,7 @@ int process_interrupts (MSHW* ms)
 	if (ms->io[3] & 2 && !(ms->interrupt_mask & 2))
 	{
 		ms->interrupt_mask |= 2;
-		return z80ex_nmi(ms->z80);
+		return z80ex_int(ms->z80);
 	}
 
 	// Otherwise ignore this
@@ -888,7 +897,7 @@ int main(int argc, char *argv[])
 			} else if (execute_counter > 15) {
 				execute_counter = 0;
 				while (tstate_counter < interrupt_period ||
-				  !z80ex_nmi_possible(ms.z80)) {
+				  !z80ex_int_possible(ms.z80)) {
 					if (!log_isverbose() && !z80ex_last_op_type(ms.z80)){
 						debug_dasm(&ms);
 					}
