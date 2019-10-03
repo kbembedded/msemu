@@ -651,6 +651,7 @@ int main(int argc, char *argv[])
 	char *dataflash_path = "dataflash.bin";
 	char* logpath = NULL;
 	int c;
+	int ret = 0;
 	int opt_verbose = 0;
 	int single_step = 0;
 
@@ -927,18 +928,6 @@ int main(int argc, char *argv[])
 			ms.lcd_lastupdate = 0;
 		}
 
-		/* Write dataflash buffer to disk if it was modified */
-		if (ms.dataflash_updated) {
-			int ret = buftoflash((uint8_t *)ms.dev_map[DF], dataflash_path, MEBIBYTE/2);
-			if (ret != 0) {
-				log_error(
-					"Failed writing dataflash to disk (%s), err 0x%08X\n",
-					dataflash_path, ret);
-			} else {
-				ms.dataflash_updated = 0;
-			}
-		}
-
 		/* XXX: All of this needs to be reworked to be far more
 		 * efficient.
 		 */
@@ -997,6 +986,17 @@ int main(int argc, char *argv[])
 		lasttick = currenttick;
 	}
 
+	/* Write dataflash buffer to disk if it was modified */
+	if (ms.dataflash_updated) {
+		log_error("Writing dataflash buffer to disk\n");
+		ret = buftoflash((uint8_t *)ms.dev_map[DF], dataflash_path,
+		  MEBIBYTE/2);
+		if (ret < MEBIBYTE/2) {
+			log_error(
+			  "Failed writing dataflash to %s, only wrote %d\n",
+			  dataflash_path, ret);
+		}
+	}
 
 	log_shutdown();
 
