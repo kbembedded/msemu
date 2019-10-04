@@ -642,6 +642,29 @@ void sigint(int sig)
 	printf("\nReceived SIGINT, interrupting\n");
 }
 
+void usage(const char *path_arg, const char *cf_path, const char *df_path)
+{
+	printf(
+	  "\nMailstation Emulator\n\n"
+
+	  "Usage: \n"
+	  "  %s [-c <path] [-d <path>] [-l <path>] [-v]\n"
+	  "  %s -h | --help\n\n"
+
+	  "Options:\n"
+	  "  -c <path>, --codeflash <path>  Path to codeflash ROM (def: %s)\n"
+	  "  -d <path>, --dataflash <path>  Path to dataflash ROM (def: %s)\n"
+	  "  -l <path>, --logfile <path>    Output debug info to <path>\n"
+	  "  -v, --verbose                  Output debug info to terminal\n"
+	  "  -h, --help                     This usage information\n\n"
+
+	  "Debugger:\n"
+	  "  When running, press ctrl+c on the terminal window to halt exec\n"
+	  "  and drop to interactive debug shell. Use the command 'h' while\n"
+	  "  in the shell for further help output regarding debugger use\n\n",
+	  path_arg, path_arg, cf_path, df_path);
+}
+
 /* Main
  *
  */
@@ -710,12 +733,7 @@ int main(int argc, char *argv[])
 			break;
 		  case 'h':
 		  default:
-			printf("Usage: %s [-c <path>] [-d <path>] [-l <path>]\n", argv[0]);
-			printf(" -c <path>   | path to codeflash (default: %s)\n", codeflash_path);
-			printf(" -d <path>   | path to dataflash (default: %s)\n", dataflash_path);
-			printf(" -l <path>   | path to log file\n");
-			printf(" -v          | verbose output to terminal\n");
-			printf(" -h          | show this usage menu\n");
+			usage(argv[0], codeflash_path, dataflash_path);
 			return 1;
 		}
 	}
