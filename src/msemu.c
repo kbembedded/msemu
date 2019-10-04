@@ -648,12 +648,13 @@ void usage(const char *path_arg, const char *cf_path, const char *df_path)
 	  "\nMailstation Emulator\n\n"
 
 	  "Usage: \n"
-	  "  %s [-c <path] [-d <path>] [-l <path>] [-v]\n"
+	  "  %s [-c <path] [-d <path> [-n]] [-l <path>] [-v]\n"
 	  "  %s -h | --help\n\n"
 
 	  "Options:\n"
 	  "  -c <path>, --codeflash <path>  Path to codeflash ROM (def: %s)\n"
 	  "  -d <path>, --dataflash <path>  Path to dataflash ROM (def: %s)\n"
+	  "  -n                             Don't write changes back to disk\n"
 	  "  -l <path>, --logfile <path>    Output debug info to <path>\n"
 	  "  -v, --verbose                  Output debug info to terminal\n"
 	  "  -h, --help                     This usage information\n\n"
@@ -672,6 +673,7 @@ int main(int argc, char *argv[])
 {
 	char *codeflash_path = "codeflash.bin";
 	char *dataflash_path = "dataflash.bin";
+	int opt_nodfwrite = 0;
 	char* logpath = NULL;
 	int c;
 	int ret = 0;
@@ -711,7 +713,7 @@ int main(int argc, char *argv[])
 
 	/* Process arguments */
 	while ((c = getopt_long(argc, argv,
-	  "hc:d:l:v", long_opts, NULL)) != -1) {
+	  "hc:d:l:vn", long_opts, NULL)) != -1) {
 		switch(c) {
 		  case 'c':
 			codeflash_path = malloc(strlen(optarg)+1);
@@ -722,6 +724,9 @@ int main(int argc, char *argv[])
 			dataflash_path = malloc(strlen(optarg)+1);
 			/* TODO: Implement error handling here */
 			strncpy(dataflash_path, optarg, strlen(optarg)+1);
+			break;
+		  case 'n':
+			opt_nodfwrite = 1;
 			break;
 		  case 'l':
 			logpath = malloc(strlen(optarg) + 1);
@@ -1006,13 +1011,17 @@ int main(int argc, char *argv[])
 
 	/* Write dataflash buffer to disk if it was modified */
 	if (ms.dataflash_updated) {
-		log_error("Writing dataflash buffer to disk\n");
-		ret = buftoflash((uint8_t *)ms.dev_map[DF], dataflash_path,
-		  MEBIBYTE/2);
-		if (ret < MEBIBYTE/2) {
-			log_error(
-			  "Failed writing dataflash to %s, only wrote %d\n",
-			  dataflash_path, ret);
+		if (opt_nodfwrite) {
+			log_error("Not writing modified dataflash to disk!\n");
+		} else {
+			log_error("Writing dataflash buffer to disk\n");
+			ret = buftoflash((uint8_t *)ms.dev_map[DF],
+			  dataflash_path, MEBIBYTE/2);
+			if (ret < MEBIBYTE/2) {
+				log_error(
+				  "Failed writing dataflash, only wrote %d\n",
+				  ret);
+			}
 		}
 	}
 
