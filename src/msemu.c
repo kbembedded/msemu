@@ -863,66 +863,55 @@ int main(int argc, char *argv[])
 			}
 		}
 
+		/* XXX: Can replace with SDL_TICKS_PASSED with new
+		 * SDL version. */
 		currenttick = SDL_GetTicks();
 
-		/* Let the Z80 process code at regular intervals */
+		/* Let the Z80 process code in chunks of time to better match
+		 * real time Mailstation behavior.
+		 *
+		 * Execution is gated to roughly a regular timer interrupt rate.
+		 * z80ex provides a callback for every T state that could be
+		 * used to gate execution in the future.
+		 * Every 15 ms (64 hz) a timer interrupt fires in the MS to
+		 * handle key input, with a counter incrementing every 1 s. Run
+		 * Z80 as fast as possible for 15 ms worth of T states, then
+		 * stop and try to INT. The timer to raise an INT could be done
+		 * async to more accurately model the MS.
+		 *
+		 * The execution loop below will run until a pre-determined num
+		 * of T states has passed (based on default 12 MHz execution),
+		 * and the last Z80 step was a complete instruction and not a
+		 * prefix. Some opcodes actually have two bytes associated with
+		 * the actual instruction. After this, an INT is attempted.
+		 *
+		 * Execution loop will only stop prematurely if a breakpoint on
+		 * the PC is hit. Interrupting with ctrl+c in terminal or esc
+		 * on the SDL window will only occur after this loop has
+		 * completed.*/
 		if (ms.power_state == MS_POWERSTATE_ON) {
-			/* XXX: Can replace with SDL_TICKS_PASSED with new
-			 * SDL version.
-			 */
-			/* NOTE: The point of this is to effectively match
-			 * execution speed with realtime. Normally, the MS
-			 * sees an interrupt every 64 Hz, this handles keyboard
-			 * reading as well as incrementing timers.
-			 * With a 64 Hz interrupt, this means an interrupt
-			 * occurs every 15 ms. The z80em tool just goes as
-			 * fast as it can, there is no (known) way to spec how
-			 * long in real time a single T-State should take.
-			 * The workaround for this, is to delay execution for
-			 * 15 SDL ticks, or 15 ms, every interrupt period to
-			 * get roughly time accurate execution.
-			 */
 			execute_counter += currenttick - lasttick;
-
-			/* This loop is our real-time gating. The only reason
-			 * this loop should exit is:
-			 * We're single stepping
-			 * To process an NMI (every 64 Hz)
-			 *
-			 * Once we process an interrupt, stall execution
-			 * until the interrupt would have happened realtime.
-			 * This is based on CPU execution speed, default is
-			 * 12 MHz but can be changed on the fly via a port wr.
-			 *
-			 * Due to how z80ex processes steps, after a call to
-			 * z80ex_step() it might not be possible to NMI, if
-			 * thats the case, keep stepping until an NMI is
-			 * possible.
-			 *
-			 * This step process also means we need to ensure
-			 * we only decode full opcodes for dasm, the
-			 * z80ex_last_op_type() returns a 0 when the last op
-			 * was complete.
-			 *
-			 * In order to have correct and full simulation, single
-			 * step actions happen here, that way the SDL window
-			 * can be updated, keys can be parsed, etc.
-			 */
 			if (single_step) {
+				/* Force verbose output for single step */
 				log_push(1);
 				do {
+					/* debug_dasm() only works at the start
+					 * of a full opcode, therefore need to
+					 * check that the last step was not a
+					 * prefix but a full instruction */
 					if (!z80ex_last_op_type(ms.z80)) {
 						debug_dasm(&ms);
 					}
 					tstate_counter += z80ex_step(ms.z80);
 				} while (z80ex_last_op_type(ms.z80));
+				/* Restore prior verbosity level */
 				log_pop();
 
 			} else if (execute_counter > 15) {
 				execute_counter = 0;
 				while (tstate_counter < interrupt_period ||
-				  !z80ex_int_possible(ms.z80)) {
-					if (!log_isverbose() && !z80ex_last_op_type(ms.z80)){
+				  z80ex_last_op_type(ms.z80)) {
+					if (log_isverbose() && !z80ex_last_op_type(ms.z80)){
 						debug_dasm(&ms);
 					}
 					if (z80ex_get_reg(ms.z80, regPC) == ms.bp) {
