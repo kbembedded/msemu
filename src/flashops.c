@@ -99,16 +99,13 @@ int flashtobuf(uint8_t *buf, const char *file_path, ssize_t sz)
 	}
 }
 
-/* XXX: See if there is a way to only write data that changed? */
 int buftoflash(uint8_t *buf, const char *file_path, ssize_t sz)
 {
 	FILE *fd;
+	int ret;
 
-	/* XXX: Move this print to debug out */
-	/* XXX: Check error codes */
-	printf("Writing dataflash...\n");
 	fd = fopen(file_path, "wb");
-	fwrite(buf, sizeof(uint8_t), sz, fd);
+	ret = fwrite(buf, sizeof(uint8_t), sz, fd);
 	fclose(fd);
-	return 0;
+	return ret;
 }

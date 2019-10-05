@@ -642,6 +642,30 @@ void sigint(int sig)
 	printf("\nReceived SIGINT, interrupting\n");
 }
 
+void usage(const char *path_arg, const char *cf_path, const char *df_path)
+{
+	printf(
+	  "\nMailstation Emulator\n\n"
+
+	  "Usage: \n"
+	  "  %s [-c <path] [-d <path> [-n]] [-l <path>] [-v]\n"
+	  "  %s -h | --help\n\n"
+
+	  "Options:\n"
+	  "  -c <path>, --codeflash <path>  Path to codeflash ROM (def: %s)\n"
+	  "  -d <path>, --dataflash <path>  Path to dataflash ROM (def: %s)\n"
+	  "  -n                             Don't write changes back to disk\n"
+	  "  -l <path>, --logfile <path>    Output debug info to <path>\n"
+	  "  -v, --verbose                  Output debug info to terminal\n"
+	  "  -h, --help                     This usage information\n\n"
+
+	  "Debugger:\n"
+	  "  When running, press ctrl+c on the terminal window to halt exec\n"
+	  "  and drop to interactive debug shell. Use the command 'h' while\n"
+	  "  in the shell for further help output regarding debugger use\n\n",
+	  path_arg, path_arg, cf_path, df_path);
+}
+
 /* Main
  *
  */
@@ -649,8 +673,10 @@ int main(int argc, char *argv[])
 {
 	char *codeflash_path = "codeflash.bin";
 	char *dataflash_path = "dataflash.bin";
+	int opt_nodfwrite = 0;
 	char* logpath = NULL;
 	int c;
+	int ret = 0;
 	int opt_verbose = 0;
 	int single_step = 0;
 
@@ -687,7 +713,7 @@ int main(int argc, char *argv[])
 
 	/* Process arguments */
 	while ((c = getopt_long(argc, argv,
-	  "hc:d:l:v", long_opts, NULL)) != -1) {
+	  "hc:d:l:vn", long_opts, NULL)) != -1) {
 		switch(c) {
 		  case 'c':
 			codeflash_path = malloc(strlen(optarg)+1);
@@ -699,6 +725,9 @@ int main(int argc, char *argv[])
 			/* TODO: Implement error handling here */
 			strncpy(dataflash_path, optarg, strlen(optarg)+1);
 			break;
+		  case 'n':
+			opt_nodfwrite = 1;
+			break;
 		  case 'l':
 			logpath = malloc(strlen(optarg) + 1);
 			/* TODO: Implement error handling here */
@@ -709,12 +738,7 @@ int main(int argc, char *argv[])
 			break;
 		  case 'h':
 		  default:
-			printf("Usage: %s [-c <path>] [-d <path>] [-l <path>]\n", argv[0]);
-			printf(" -c <path>   | path to codeflash (default: %s)\n", codeflash_path);
-			printf(" -d <path>   | path to dataflash (default: %s)\n", dataflash_path);
-			printf(" -l <path>   | path to log file\n");
-			printf(" -v          | verbose output to terminal\n");
-			printf(" -h          | show this usage menu\n");
+			usage(argv[0], codeflash_path, dataflash_path);
 			return 1;
 		}
 	}
@@ -927,18 +951,6 @@ int main(int argc, char *argv[])
 			ms.lcd_lastupdate = 0;
 		}
 
-		/* Write dataflash buffer to disk if it was modified */
-		if (ms.dataflash_updated) {
-			int ret = buftoflash((uint8_t *)ms.dev_map[DF], dataflash_path, MEBIBYTE/2);
-			if (ret != 0) {
-				log_error(
-					"Failed writing dataflash to disk (%s), err 0x%08X\n",
-					dataflash_path, ret);
-			} else {
-				ms.dataflash_updated = 0;
-			}
-		}
-
 		/* XXX: All of this needs to be reworked to be far more
 		 * efficient.
 		 */
@@ -997,6 +1009,21 @@ int main(int argc, char *argv[])
 		lasttick = currenttick;
 	}
 
+	/* Write dataflash buffer to disk if it was modified */
+	if (ms.dataflash_updated) {
+		if (opt_nodfwrite) {
+			log_error("Not writing modified dataflash to disk!\n");
+		} else {
+			log_error("Writing dataflash buffer to disk\n");
+			ret = buftoflash((uint8_t *)ms.dev_map[DF],
+			  dataflash_path, MEBIBYTE/2);
+			if (ret < MEBIBYTE/2) {
+				log_error(
+				  "Failed writing dataflash, only wrote %d\n",
+				  ret);
+			}
+		}
+	}
 
 	log_shutdown();
 
