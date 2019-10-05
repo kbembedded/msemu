@@ -897,7 +897,7 @@ int main(int argc, char *argv[])
 			} else if (execute_counter > 15) {
 				execute_counter = 0;
 				while (tstate_counter < interrupt_period ||
-				  !z80ex_int_possible(ms.z80)) {
+				  z80ex_last_op_type(ms.z80)) {
 					if (!log_isverbose() && !z80ex_last_op_type(ms.z80)){
 						debug_dasm(&ms);
 					}
