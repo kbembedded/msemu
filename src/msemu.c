@@ -898,7 +898,7 @@ int main(int argc, char *argv[])
 				execute_counter = 0;
 				while (tstate_counter < interrupt_period ||
 				  z80ex_last_op_type(ms.z80)) {
-					if (!log_isverbose() && !z80ex_last_op_type(ms.z80)){
+					if (log_isverbose() && !z80ex_last_op_type(ms.z80)){
 						debug_dasm(&ms);
 					}
 					if (z80ex_get_reg(ms.z80, regPC) == ms.bp) {
