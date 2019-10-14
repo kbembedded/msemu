@@ -72,40 +72,35 @@ int8_t writeDataflash(MSHW* ms, unsigned int translated_addr, uint8_t val)
 	return modified;
 }
 
-/* Open flash file from path and pull its contents to memory
- *
+/*
  * XXX: Mostly not complete, still don't know exactly how all of these will
  * work together.
  */
 int flashtobuf(uint8_t *buf, const char *file_path, ssize_t sz)
 {
-	FILE *fd;
+	FILE *fd = 0;
+	int ret = 0;
 
 	fd = fopen(file_path, "rb");
 	if (fd)
 	{
-		//fseek(codeflash_fd, 0, SEEK_END);
-		/* TODO: Add debugout print here */
-		//printf("Loading Codeflash ROM:\n  %s (%ld bytes)\n",
-		//  codeflash_path, ftell(codeflash_fd));
-		//fseek(codeflash_fd, 0, SEEK_SET);
-		fread(buf, sizeof(uint8_t), sz, fd);
+		ret = fread(buf, sizeof(uint8_t), sz, fd);
 		fclose(fd);
-		return 0;
-	} else {
-		/* XXX: Move this outside of this function */
-		printf("Couldn't open flash file: %s\n", file_path);
-		return 1;
 	}
+
+	return ret;
 }
 
 int buftoflash(uint8_t *buf, const char *file_path, ssize_t sz)
 {
-	FILE *fd;
-	int ret;
+	FILE *fd = 0;
+	int ret = 0;
 
 	fd = fopen(file_path, "wb");
-	ret = fwrite(buf, sizeof(uint8_t), sz, fd);
-	fclose(fd);
+	if (fd) {
+		ret = fwrite(buf, sizeof(uint8_t), sz, fd);
+		fclose(fd);
+	}
+
 	return ret;
 }
