@@ -673,7 +673,6 @@ int main(int argc, char *argv[])
 {
 	char *codeflash_path = "codeflash.bin";
 	char *dataflash_path = "dataflash.bin";
-	int opt_dataflash_set = 0;
 	int opt_nodfwrite = 0;
 	char* logpath = NULL;
 	int c;
@@ -722,7 +721,6 @@ int main(int argc, char *argv[])
 			strncpy(codeflash_path, optarg, strlen(optarg)+1);
 			break;
 		  case 'd':
-			opt_dataflash_set = 1;
 			dataflash_path = malloc(strlen(optarg)+1);
 			/* TODO: Implement error handling here */
 			strncpy(dataflash_path, optarg, strlen(optarg)+1);
@@ -796,11 +794,11 @@ int main(int argc, char *argv[])
 	 * It should never be longer either. If it is, we just pretend like
 	 * we didn't notice. This might be unwise behavior.
 	 */
-	ret = flashtobuf((uint8_t *)ms.dev_map[CF], codeflash_path, MEBIBYTE);
-	if (ret != 0) {
+	if (!flashtobuf((uint8_t *)ms.dev_map[CF], codeflash_path, MEBIBYTE)) {
 		log_error("Failed to load codeflash at '%s'. Aborting.\n", codeflash_path);
 		abort();
 	}
+	printf("Codeflash loaded from '%s'.\n", codeflash_path);
 
 	/* Open dataflash and dump it in to a buffer.
 	 * The dataflash should be exactly 512 KiB.
@@ -808,14 +806,11 @@ int main(int argc, char *argv[])
 	 * assumed to be zero. But it in practice shouldn't happen.
 	 * It should never be longer either. If it is, we just pretend like
 	 * we didn't notice. This might be unwise behavior.
-	 * If ./dataflash.bin does not exist, and --dataflash <path> is not
-	 * passed, then create a new dataflash in RAM which will get written
-	 * to ./dataflash.bin
+	 * If the dataflash image does not exist, it will be created when
+	 * the dataflash is written to disk.
 	 */
-	ret = flashtobuf((uint8_t *)ms.dev_map[DF], dataflash_path, MEBIBYTE/2);
-	if (ret != 0 && opt_dataflash_set) {
-		printf("Dataflash image not found at '%s', aborting.\n", dataflash_path);
-		abort();
+	if (!flashtobuf((uint8_t *)ms.dev_map[DF], dataflash_path, MEBIBYTE/2)) {
+		printf("Existing dataflash image not found at '%s'.\n", dataflash_path);
 	}
 	printf("Dataflash will be saved to '%s' on exit.\n", dataflash_path);
 
