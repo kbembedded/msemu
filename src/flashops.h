@@ -16,7 +16,7 @@ int8_t writeDataflash(ms_ctx* ms, unsigned int translated_addr, uint8_t val);
  *
  * Returns number of bytes read.
  */
-int flashtobuf(uint8_t *buf, const char *file_path, ssize_t sz);
+int filetobuf(uint8_t *buf, const char *file_path, ssize_t sz);
 
 /**
  * Writes a buffer to file.
@@ -27,5 +27,5 @@ int flashtobuf(uint8_t *buf, const char *file_path, ssize_t sz);
  *
  * Returns number of bytes written.
  */
-int buftoflash(uint8_t *buf, const char *file_path, ssize_t sz);
+int buftofile(uint8_t *buf, const char *file_path, ssize_t sz);
 #endif

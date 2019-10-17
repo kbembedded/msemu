@@ -683,7 +683,7 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	 * It should never be longer either. If it is, we just pretend like
 	 * we didn't notice. This might be unwise behavior.
 	 */
-	if (!flashtobuf((uint8_t *)ms->dev_map[CF], options->cf_path, MEBIBYTE)) {
+	if (!filetobuf((uint8_t *)ms->dev_map[CF], options->cf_path, MEBIBYTE)) {
 		log_error("Failed to load codeflash at '%s'. Aborting.\n", options->cf_path);
 		return MS_ERR;
 	}
@@ -698,7 +698,7 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	 * If the dataflash image does not exist, it will be created when
 	 * the dataflash is written to disk.
 	 */
-	if (!flashtobuf((uint8_t *)ms->dev_map[DF], options->df_path, MEBIBYTE/2)) {
+	if (!filetobuf((uint8_t *)ms->dev_map[DF], options->df_path, MEBIBYTE/2)) {
 		printf("Existing dataflash image not found at '%s'.\n", options->df_path);
 	}
 

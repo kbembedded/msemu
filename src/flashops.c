@@ -76,7 +76,7 @@ int8_t writeDataflash(ms_ctx* ms, unsigned int translated_addr, uint8_t val)
  * XXX: Mostly not complete, still don't know exactly how all of these will
  * work together.
  */
-int flashtobuf(uint8_t *buf, const char *file_path, ssize_t sz)
+int filetobuf(uint8_t *buf, const char *file_path, ssize_t sz)
 {
 	FILE *fd = 0;
 	int ret = 0;
@@ -91,7 +91,7 @@ int flashtobuf(uint8_t *buf, const char *file_path, ssize_t sz)
 	return ret;
 }
 
-int buftoflash(uint8_t *buf, const char *file_path, ssize_t sz)
+int buftofile(uint8_t *buf, const char *file_path, ssize_t sz)
 {
 	FILE *fd = 0;
 	int ret = 0;
