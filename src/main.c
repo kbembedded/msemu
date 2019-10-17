@@ -113,7 +113,7 @@ int main(int argc, char** argv)
 			log_error("Not writing modified dataflash to disk!\n");
 		} else {
 			log_error("Writing dataflash buffer to disk\n");
-			ret = buftoflash((uint8_t *)ms.dev_map[DF],
+			ret = buftofile((uint8_t *)ms.dev_map[DF],
 			  options.df_path, MEBIBYTE/2);
 			if (ret < MEBIBYTE/2) {
 				log_error(
