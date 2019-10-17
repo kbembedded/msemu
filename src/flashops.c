@@ -4,23 +4,29 @@
 #include "msemu.h"
 #include "logger.h"
 
-/* Write a byte to dataflash while handling commands intended for 28SF040 flash
+/* Interpret commands intended for 28SF040 flash
  *
  * The Z80 will output commands and an addres. In order to properly handle a
- * write, we have to interpret these commands like it were an actualy 28SF040.
+ * write, we have to interpret these commands like it were an actual 28SF040.
  *
- * Software data protection status is _NOT_ implemented and seems to not be
- * necessary in normal application flow.
+ * The read path of the dataflash does not have a command associated with it,
+ * therefore this is function is only useful for writing/erasing the DF
  *
- * Returns 0 on success. 1 if the dataflash was actually modified.
+ * Software data protection status is _NOT_ implemented by this functions, it
+ * seems to not be use by the Mailstation in normal application flow.
+ *
+ * Returns 1 if the dataflash was actually modified. Otherwise returns 0
+ *
+ * While there are a few different possible errors, they are not indicated
+ * as a return value at this time.
  *
  * TODO: Add debugging hook here.
  */
-int8_t writeDataflash(ms_ctx* ms, unsigned int translated_addr, uint8_t val)
+int df_parse_cmd (ms_ctx* ms, unsigned int translated_addr, uint8_t val)
 {
 	static uint8_t cycle;
 	static uint8_t cmd;
-	int8_t modified = 0;
+	int modified = 0;
 
 	if (!cycle) {
 		switch (val) {
