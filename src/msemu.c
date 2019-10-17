@@ -279,17 +279,17 @@ void z80ex_mwrite(
 
 
 	switch (dev) {
-	  /* Right now, writeLCD() and writeDataflash() need an addr & 0x3FFF.
+	  /* Right now, writeLCD() and df_parse_cmd() need an addr & 0x3FFF.
 	   * This falls within the range of the buffer regardless of the slot
 	   * the actual device is in. Since slots are paged, the final address
-	   * passed to writeDataflash() is offset by page_sz * page_num
+	   * passed to df_parse_cmd() is offset by page_sz * page_num
 	   */
 	  case LCD_L:
 	  case LCD_R:
 		writeLCD(ms, (addr - (slot << 14)), val, dev);
 		break;
 	  case DF:
-		ms->dataflash_updated = writeDataflash(ms,
+		ms->dataflash_updated = df_parse_cmd(ms,
 		  ((addr - (slot << 14)) + (0x4000 * page)), val);
 		break;
 

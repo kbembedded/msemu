@@ -5,7 +5,14 @@
 #include <stdio.h>
 #include "msemu.h"
 
-int8_t writeDataflash(ms_ctx* ms, unsigned int translated_addr, uint8_t val);
+/**
+ * Interpret commands intended for 28SF040 flash, aka Mailstation dataflash
+ *
+ * ms              - Struct of ms_hw used by main emulation
+ * translated_addr - Address in range of dataflash, 0x00000:0x7FFFF
+ * val             - Command or value to send to dataflash
+ */
+int df_parse_cmd(ms_ctx* ms, unsigned int translated_addr, uint8_t val);
 
 /**
  * Reads a file into memory.
