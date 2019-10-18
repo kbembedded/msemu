@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include "msemu.h"
 
+#define DF_SN_OFFS	0x7FFC8
+
 /**
  * Interpret commands intended for 28SF040 flash, aka Mailstation dataflash
  *
@@ -13,6 +15,24 @@
  * val             - Command or value to send to dataflash
  */
 int df_parse_cmd(ms_ctx* ms, unsigned int translated_addr, uint8_t val);
+
+/**
+ * Generate and set a random serial number in dataflash
+ *
+ * See flashops.c for more detail about the serial number
+ *
+ * ms - Pointer to ms_ctx which already has dev_map set up and allocated
+ */
+void df_set_rnd_serial(ms_ctx *ms);
+
+/**
+ * Check if serial number in dataflash is valid
+ *
+ * See flashops.c for more detail about the serial number
+ *
+ * ms - Pointer to ms_ctx which already has dev_map set up and allocated
+ */
+int df_serial_valid(ms_ctx *ms);
 
 /**
  * Reads a file into memory.
