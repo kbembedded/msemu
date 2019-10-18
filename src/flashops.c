@@ -1,8 +1,11 @@
 #include "flashops.h"
-
-#include <string.h>
 #include "msemu.h"
 #include "logger.h"
+
+#include <ctype.h>
+#include <time.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* Interpret commands intended for 28SF040 flash
  *
@@ -76,6 +79,62 @@ int df_parse_cmd (ms_ctx* ms, unsigned int translated_addr, uint8_t val)
 	}
 
 	return modified;
+}
+
+/* Generate and set a random serial number to dataflash buffer that is valid
+ * for Mailstation
+ *
+ * Disassembly of codeflash found that the verification process for serial num
+ * is that it starts at 0x7FFC8, is 16 bytes long, each character must be
+ * ASCII '0'-'9', 'A'-'Z', 'a'-'z', or '-'
+ * In all observed Mailstations, the last character is '-', but it does
+ * not seem to be enforced in Mailstation firmware. Nevertheless, the last char
+ * is set to a '-'
+ */
+void df_set_rnd_serial(ms_ctx *ms)
+{
+	int i;
+	uint8_t rnd;
+	uint8_t *buf;
+
+	buf = (uint8_t *)(ms->dev_map[DF] + DF_SN_OFFS);
+
+	srandom((unsigned int)time(NULL));
+	for (i = 0; i < 15; i++) {
+		do {
+			rnd = random();
+		} while (!isalnum(rnd));
+		*buf = rnd;
+		buf++;
+	}
+
+	*buf = '-';
+}
+
+/* Check if serial number in dataflash buffer is valid for Mailstation
+ *
+ * Returns 1 if number is valid, 0 if invalid.
+ *
+ * Disassembly of codeflash found that the verification process for serial num
+ * is that it starts at 0x7FFC8, is 16 bytes long, each character must be
+ * ASCII '0'-'9', 'A'-'Z', 'a'-'z', or '-'
+ * In all observed Mailstations, the last character is '-', but it does
+ * not seem to be enforced in Mailstation firmware; it is not enforced here
+ */
+int df_serial_valid(ms_ctx *ms)
+{
+	int i;
+	int ret = 1;
+	uint8_t *buf;
+
+	buf = (uint8_t *)(ms->dev_map[DF] + DF_SN_OFFS);
+
+	for (i = 0; i < 16; i++) {
+		if (!isalnum(*buf) && *buf != '-') ret = 0;
+		buf++;
+	}
+
+	return ret;
 }
 
 /*

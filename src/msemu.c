@@ -702,6 +702,12 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 		printf("Existing dataflash image not found at '%s'.\n", options->df_path);
 	}
 
+	if (!df_serial_valid(ms)) {
+		df_set_rnd_serial(ms);
+	}
+
+	printf("Dataflash will be saved to '%s' on exit.\n", options->df_path);
+
 	return MS_OK;
 }
 
