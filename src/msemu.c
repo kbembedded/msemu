@@ -695,18 +695,28 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	 * assumed to be zero. But it in practice shouldn't happen.
 	 * It should never be longer either. If it is, we just pretend like
 	 * we didn't notice. This might be unwise behavior.
-	 * If the dataflash image does not exist, it will be created when
-	 * the dataflash is written to disk.
+	 */
+	/* If dataflash file does not exist, create random serial number
+	 * If dataflash file does exist, check that the serial number is valid.
+	 *   If it is not a valid serial number, error out because some unknown
+	 *   binary was passed as the dataflash.
 	 */
 	if (!filetobuf((uint8_t *)ms->dev_map[DF], options->df_path, MEBIBYTE/2)) {
-		printf("Existing dataflash image not found at '%s'.\n", options->df_path);
-	}
-
-	if (!df_serial_valid(ms)) {
+		printf("Existing dataflash image not found at '%s', creating "
+		  "a new dataflah image.\n", options->df_path);
 		df_set_rnd_serial(ms);
+	} else {
+		if (!df_serial_valid(ms)) {
+			log_error("Binary file '%s', may not be a valid "
+			  "dataflash image (contains invalid serial number)!\n",
+			  options->df_path);
+			return MS_ERR;
+		}
 	}
 
-	printf("Dataflash will be saved to '%s' on exit.\n", options->df_path);
+	/* TODO: Add git tags to this, because thats neat */
+	printf("\nMailstation Emulator v0.2\n");
+	printf("\nPress ctrl+c to enter interactive Mailstation debugger\n");
 
 	return MS_OK;
 }
