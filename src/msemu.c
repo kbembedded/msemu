@@ -12,6 +12,7 @@
 #include "flashops.h"
 #include "ui.h"
 #include "debug.h"
+#include "sizes.h"
 
 #include <SDL/SDL.h>
 #include <z80ex/z80ex.h>
@@ -637,10 +638,10 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	 *
 	 * TODO: Add error checking on the buffer allocation
 	 */
-	ms->dev_map[CF] = (uintptr_t)calloc(MEBIBYTE, sizeof(uint8_t));
-	ms->dev_map[DF] = (uintptr_t)calloc(MEBIBYTE/2, sizeof(uint8_t));
-	ms->dev_map[RAM] = (uintptr_t)calloc(MEBIBYTE/8, sizeof(uint8_t));
-	ms->io = (uint8_t *)calloc(MEBIBYTE/16, sizeof(uint8_t));
+	ms->dev_map[CF] = (uintptr_t)calloc(SZ_1M, sizeof(uint8_t));
+	ms->dev_map[DF] = (uintptr_t)calloc(SZ_512K, sizeof(uint8_t));
+	ms->dev_map[RAM] = (uintptr_t)calloc(SZ_128K, sizeof(uint8_t));
+	ms->io = (uint8_t *)calloc(SZ_64K, sizeof(uint8_t));
 	ms->lcd_dat1bit = (uint8_t *)calloc(((MS_LCD_WIDTH * MS_LCD_HEIGHT) / 8),
 	  sizeof(uint8_t));
 	/* XXX: MAGIC NUMBEERRRR */
@@ -683,7 +684,7 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	 * It should never be longer either. If it is, we just pretend like
 	 * we didn't notice. This might be unwise behavior.
 	 */
-	if (!filetobuf((uint8_t *)ms->dev_map[CF], options->cf_path, MEBIBYTE)) {
+	if (!filetobuf((uint8_t *)ms->dev_map[CF], options->cf_path, SZ_1M)) {
 		log_error("Failed to load codeflash at '%s'. Aborting.\n", options->cf_path);
 		return MS_ERR;
 	}
@@ -701,7 +702,8 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	 *   If it is not a valid serial number, error out because some unknown
 	 *   binary was passed as the dataflash.
 	 */
-	if (!filetobuf((uint8_t *)ms->dev_map[DF], options->df_path, MEBIBYTE/2)) {
+	if (!filetobuf((uint8_t *)ms->dev_map[DF], options->df_path, SZ_512K)) {
+
 		printf("Existing dataflash image not found at '%s', creating "
 		  "a new dataflah image.\n", options->df_path);
 		df_set_rnd_serial(ms);

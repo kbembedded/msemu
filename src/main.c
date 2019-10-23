@@ -5,6 +5,7 @@
 #include "flashops.h"
 #include "logger.h"
 #include "msemu.h"
+#include "sizes.h"
 #include "ui.h"
 
 #include <SDL/SDL.h>
@@ -114,8 +115,8 @@ int main(int argc, char** argv)
 		} else {
 			log_error("Writing dataflash buffer to disk\n");
 			ret = buftofile((uint8_t *)ms.dev_map[DF],
-			  options.df_path, MEBIBYTE/2);
-			if (ret < MEBIBYTE/2) {
+			  options.df_path, SZ_512K);
+			if (ret < SZ_512K) {
 				log_error(
 				  "Failed writing dataflash, only wrote %d\n",
 				  ret);
