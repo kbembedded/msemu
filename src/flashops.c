@@ -1,6 +1,7 @@
 #include "flashops.h"
 #include "msemu.h"
 #include "logger.h"
+#include "sizes.h"
 
 #include <ctype.h>
 #include <time.h>
@@ -64,7 +65,7 @@ int df_parse_cmd (ms_ctx* ms, unsigned int translated_addr, uint8_t val)
 		  case 0x30: /* Chip erase, execute cmd is 0x30 */
 			if (val != 0x30) break;
 			log_debug(" * DF    Chip erase\n");
-			memset((uint8_t *)ms->dev_map[DF], 0xFF, MEBIBYTE/2);
+			memset((uint8_t *)ms->dev_map[DF], 0xFF, SZ_512K);
 			modified = 1;
 			break;
 		  case 0x90: /* Read ID */

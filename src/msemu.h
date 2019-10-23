@@ -3,8 +3,6 @@
 
 #include <z80ex/z80ex.h>
 
-#define	MEBIBYTE	0x100000
-
 // Return codes
 #define MS_OK    0
 #define MS_ERR   1
