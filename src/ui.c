@@ -2,6 +2,7 @@
 #include "ui.h"
 
 #include "msemu.h"
+#include "rawcga.h"
 #include <SDL/SDL.h>
 #include <SDL/SDL_rotozoom.h>
 
@@ -89,7 +90,7 @@ void printstring(SDL_Surface* surface, char *mystring)
 			cursorX = 0;
 			cursorY++;
 			mystring++;
-			continue; 
+			continue;
 		}
 
 		printcharXY(surface, *mystring, cursorX * 8, cursorY * 8);
@@ -108,7 +109,7 @@ void printstring(SDL_Surface* surface, char *mystring)
 }
 
 /* XXX: This needs rework still*/
-void ui_init(char* raw_cga_array, uint8_t* ms_lcd_buffer)
+void ui_init(uint8_t* ms_lcd_buffer)
 {
 	SDL_Surface *cgafont_tmp = NULL;
 	SDL_Color fontcolors[2];

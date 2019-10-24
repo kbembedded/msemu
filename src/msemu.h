@@ -7,6 +7,14 @@
 
 #define	MEBIBYTE	0x100000
 
+// Return codes
+#define MS_OK    0
+#define MS_ERR   1
+
+// Debugger Flags
+#define MS_DBG_ON           1 << 0
+#define MS_DBG_SINGLE_STEP  1 << 1
+
 // Default screen size
 #define MS_LCD_WIDTH 	320
 #define MS_LCD_HEIGHT	240
@@ -16,12 +24,12 @@
 #define MS_POWERSTATE_OFF 0
 
 enum ms_dev_map {
-	CF 		= 0x00,
-	RAM 		= 0x01,
-	LCD_L 		= 0x02,
-	DF 		= 0x03,
-	LCD_R 		= 0x04,
-	MODEM 		= 0x05,
+	CF    = 0x00,
+	RAM   = 0x01,
+	LCD_L = 0x02,
+	DF    = 0x03,
+	LCD_R = 0x04,
+	MODEM = 0x05,
 
 	DEV_CNT,
 };
@@ -107,8 +115,38 @@ typedef struct mshw {
 	// Holds current power state (on or off)
 	uint8_t power_state;
 
+	// Holds debugging state (on or off)
+	uint8_t debugger_state;
+
 	// Single breakpoint on a specified PC
 	int32_t bp;
 } MSHW;
+
+typedef struct MsOpts {
+	// Codeflash path
+	char* cf_path;
+
+	// Dataflash path
+	char* df_path;
+} MsOpts;
+
+/**
+ * Initializes a mailstation emulator.
+ *
+ * ms      - ref to mailstation emulator
+ * options - initialization options
+ *
+ * Returns `MS_OK` on success, error code on failure
+ */
+int ms_init(MSHW* ms, MsOpts* options);
+
+/**
+ * Runs the mailstation emulation
+ *
+ * ms - ref to mailstation emulator
+ *
+ * Returns `MS_OK` on success, error code on failure
+ */
+int ms_run(MSHW* ms);
 
 #endif // __MSEMU_H_

@@ -26,8 +26,11 @@ else
 endif
 
 
-msemu.exe: msemu.o flashops.o logger.o ui.o debug.o
-	$(CC) $(CFLAGS) logger.o flashops.o ui.o msemu.o debug.o  -o $(OUTFILE) $(USINGMINGW) $(LIBS)
+msemu.exe: main.o msemu.o flashops.o logger.o ui.o debug.o
+	$(CC) $(CFLAGS) main.o logger.o flashops.o ui.o msemu.o debug.o  -o $(OUTFILE) $(USINGMINGW) $(LIBS)
+
+main.o: main.c
+	$(CC) $(CFLAGS) -c main.c -o main.o
 
 msemu.o: msemu.c
 	$(CC) $(CFLAGS) -c msemu.c -o msemu.o
