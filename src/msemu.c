@@ -6,13 +6,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <getopt.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>
 #include <time.h>
-#include <unistd.h>
-#include <signal.h>
 #include "logger.h"
 #include "msemu.h"
 #include "flashops.h"
@@ -20,7 +14,6 @@
 #include "debug.h"
 
 #include <SDL/SDL.h>
-#include <SDL/SDL_rotozoom.h>
 #include <z80ex/z80ex.h>
 #include <z80ex/z80ex_dasm.h>
 

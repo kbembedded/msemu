@@ -1,8 +1,8 @@
 #include "flashops.h"
 
+#include <memory.h>
 #include "msemu.h"
 #include "logger.h"
-#include <z80ex/z80ex.h>
 
 /* Write a byte to dataflash while handling commands intended for 28SF040 flash
  *

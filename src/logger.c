@@ -2,7 +2,6 @@
 
 #include <assert.h>
 #include <stdarg.h>
-#include <stdint.h>
 #include <stdio.h>
 
 // This handle is used for outputting all debug info
@@ -65,7 +64,7 @@ void log_init(const char* logpath, int verb)
 	{
 		debugoutfile = fopen(logpath, "w");
 	}
-	
+
 	verbose = verb;
 }
 

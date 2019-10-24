@@ -1,8 +1,8 @@
 #ifndef __FLASHOPS_H__
 #define __FLASHOPS_H__
+
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include "msemu.h"
 
 int8_t writeDataflash(MSHW* ms, unsigned int translated_addr, uint8_t val);
