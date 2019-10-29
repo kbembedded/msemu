@@ -1,7 +1,7 @@
 #include <getopt.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "debug.h"
 #include "flashops.h"
 #include "logger.h"
 #include "msemu.h"
@@ -33,17 +33,6 @@ void usage(const char *path_arg, const char *cf_path, const char *df_path)
 	  path_arg, path_arg, cf_path, df_path);
 }
 
-/* Debug support */
-void sigint(int sig, void* data)
-{
-	ms_ctx* ms = (ms_ctx*)data;
-	if (ms) {
-		ms->debugger_state |= MS_DBG_ON;
-	}
-
-	printf("\nReceived SIGINT, interrupting\n");
-}
-
 int main(int argc, char** argv)
 {
 	char* logpath = NULL;
@@ -53,8 +42,6 @@ int main(int argc, char** argv)
 	int df_save_to_disk = 1;
 
 	ms_ctx ms;
-
-	struct sigaction sigact;
 
 	static struct option long_opts[] = {
 	  { "help", no_argument, NULL, 'h' },
@@ -112,9 +99,7 @@ int main(int argc, char** argv)
 	ms_init(&ms, &options);
 	ui_init(ms.lcd_dat8bit);
 
-	// Override ctrl+c to drop to debug console
-	sigact.sa_handler = sigint;
-	sigaction(SIGINT, &sigact, NULL);
+	debug_init(&ms);
 
 	// Run mailstation
 	ret = ms_run(&ms);
