@@ -734,7 +734,7 @@ int ms_run(MSHW* ms)
 
 	while (!exitemu)
 	{
-		if (ms->debugger_state &= MS_DBG_ON) {
+		if (ms->debugger_state & MS_DBG_ON) {
 			switch (debug_prompt(ms)) {
 			  case -1: /* Quit */
 				exitemu = 1;

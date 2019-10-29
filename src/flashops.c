@@ -1,6 +1,6 @@
 #include "flashops.h"
 
-#include <memory.h>
+#include <string.h>
 #include "msemu.h"
 #include "logger.h"
 
