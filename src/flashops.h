@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include "msemu.h"
 
-int8_t writeDataflash(MSHW* ms, unsigned int translated_addr, uint8_t val);
+int8_t writeDataflash(ms_ctx* ms, unsigned int translated_addr, uint8_t val);
 
 /**
  * Reads a file into memory.

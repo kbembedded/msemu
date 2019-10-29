@@ -118,15 +118,15 @@ typedef struct mshw {
 
 	// Single breakpoint on a specified PC
 	int32_t bp;
-} MSHW;
+} ms_ctx;
 
-typedef struct MsOpts {
+typedef struct ms_opts {
 	// Codeflash path
 	char* cf_path;
 
 	// Dataflash path
 	char* df_path;
-} MsOpts;
+} ms_opts;
 
 /**
  * Initializes a mailstation emulator.
@@ -136,7 +136,7 @@ typedef struct MsOpts {
  *
  * Returns `MS_OK` on success, error code on failure
  */
-int ms_init(MSHW* ms, MsOpts* options);
+int ms_init(ms_ctx* ms, ms_opts* options);
 
 /**
  * Runs the mailstation emulation
@@ -145,6 +145,6 @@ int ms_init(MSHW* ms, MsOpts* options);
  *
  * Returns `MS_OK` on success, error code on failure
  */
-int ms_run(MSHW* ms);
+int ms_run(ms_ctx* ms);
 
 #endif // __MSEMU_H_

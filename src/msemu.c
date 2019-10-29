@@ -53,7 +53,7 @@ unsigned char hex2bcd (unsigned char x)
 //
 //  Disables emulation, displays opening screen
 //
-void powerOff(MSHW* ms)
+void powerOff(ms_ctx* ms)
 {
 	ms->power_state = MS_POWERSTATE_OFF;
 
@@ -66,7 +66,7 @@ void powerOff(MSHW* ms)
 //
 //  Emulates writing to Mailstation LCD device
 //
-void writeLCD(MSHW* ms, uint16_t newaddr, uint8_t val, int lcdnum)
+void writeLCD(ms_ctx* ms, uint16_t newaddr, uint8_t val, int lcdnum)
 {
 	uint8_t *lcd_ptr;
 	if (lcdnum == LCD_L) lcd_ptr = ms->lcd_dat1bit;
@@ -121,7 +121,7 @@ void writeLCD(MSHW* ms, uint16_t newaddr, uint8_t val, int lcdnum)
 //
 //  Emulates reading from Mailstation LCD
 //
-uint8_t readLCD(MSHW* ms, uint16_t newaddr, int lcdnum)
+uint8_t readLCD(ms_ctx* ms, uint16_t newaddr, int lcdnum)
 {
 	uint8_t *lcd_ptr;
 	uint8_t ret;
@@ -165,7 +165,7 @@ Z80EX_BYTE z80ex_mread(
 {
 
 	Z80EX_BYTE ret;
-	MSHW* ms = (MSHW*)user_data;
+	ms_ctx* ms = (ms_ctx*)user_data;
 	int slot = ((addr & 0xC000) >> 14);
 	int dev = 0xFF;
 
@@ -245,7 +245,7 @@ void z80ex_mwrite(
 	void *user_data)
 {
 
-	MSHW* ms = (MSHW*)user_data;
+	ms_ctx* ms = (ms_ctx*)user_data;
 	int slot = ((addr & 0xC000) >> 14);
 	int dev = 0xFF, page = 0xFF;
 
@@ -333,7 +333,7 @@ Z80EX_BYTE z80ex_pread (
 	void *user_data)
 {
 
-	MSHW* ms = (MSHW*)user_data;
+	ms_ctx* ms = (ms_ctx*)user_data;
 
 	time_t theTime;
 	struct tm *rtc_time = NULL;
@@ -453,7 +453,7 @@ void z80ex_pwrite (
 	void *user_data)
 {
 
-	MSHW* ms = (MSHW*)user_data;
+	ms_ctx* ms = (ms_ctx*)user_data;
 	static uint8_t tmp_reg;
 
 
@@ -537,7 +537,7 @@ void z80ex_pwrite (
  * anyway? Right now the declaration looks crowded and would need some rework
  * already.
  */
-void generateKeyboardMatrix(MSHW* ms, int scancode, int eventtype)
+void generateKeyboardMatrix(ms_ctx* ms, int scancode, int eventtype)
 {
 	uint32_t i = 0;
 	int32_t *keytbl_ptr = &keyTranslateTable[0][0];
@@ -583,7 +583,7 @@ Z80EX_BYTE z80ex_intread (
  * 0x0066 would not have a valid instruction. This hints that there is some
  * expectation of an NMI occurring.
  */
-int process_interrupts (MSHW* ms)
+int process_interrupts (ms_ctx* ms)
 {
 	static int icount = 0;
 
@@ -615,7 +615,7 @@ int process_interrupts (MSHW* ms)
 //
 //  Resets Mailstation state
 //
-void resetMailstation(MSHW* ms)
+void resetMailstation(ms_ctx* ms)
 {
 	memset(ms->lcd_dat8bit, 0, 320*240);
 	memset(ms->io, 0, 64 * 1024);
@@ -627,7 +627,7 @@ void resetMailstation(MSHW* ms)
 	z80ex_reset(ms->z80);
 }
 
-int ms_init(MSHW* ms, MsOpts* options)
+int ms_init(ms_ctx* ms, ms_opts* options)
 {
 	/* Allocate and clear buffers.
 	 * Codeflash is 1 MiB
@@ -707,7 +707,7 @@ int ms_init(MSHW* ms, MsOpts* options)
 	return MS_OK;
 }
 
-int ms_run(MSHW* ms)
+int ms_run(ms_ctx* ms)
 {
 	// TODO: Consider removing dependency on SDL here and having
 	//     hooks for the UI code to attach to instead.

@@ -36,7 +36,7 @@ void usage(const char *path_arg, const char *cf_path, const char *df_path)
 /* Debug support */
 void sigint(int sig, void* data)
 {
-	MSHW* ms = (MSHW*)data;
+	ms_ctx* ms = (ms_ctx*)data;
 	if (ms) {
 		ms->debugger_state |= MS_DBG_ON;
 	}
@@ -52,7 +52,7 @@ int main(int argc, char** argv)
 	int opt_verbose = 0;
 	int df_save_to_disk = 1;
 
-	MSHW ms;
+	ms_ctx ms;
 
 	struct sigaction sigact;
 
@@ -69,7 +69,7 @@ int main(int argc, char** argv)
 	};
 
 	/* Prepare default options */
-	MsOpts options;
+	ms_opts options;
 	options.cf_path = strndup("codeflash.bin", 13);
 	options.df_path = strndup("dataflash.bin", 13);
 

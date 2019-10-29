@@ -16,7 +16,7 @@ struct cmdtable {
 	char arg;
 };
 
-int debug_prompt(MSHW *ms);
-void debug_dasm(MSHW *ms);
+int debug_prompt(ms_ctx *ms);
+void debug_dasm(ms_ctx *ms);
 
 #endif
