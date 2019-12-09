@@ -79,7 +79,7 @@ enum ms_port_map {
 				    */
 };
 
-typedef struct mshw {
+typedef struct ms_hw {
 	Z80EX_CONTEXT* z80;
 
 	uintptr_t slot_map[4];

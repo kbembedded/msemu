@@ -21,8 +21,6 @@
 uint8_t LCD_fg_color = 3;  // LCD black
 uint8_t LCD_bg_color = 2;  // LCD green
 
-int debug_console;
-
 // This table translates PC scancodes to the Mailstation key matrix
 int32_t keyTranslateTable[10][8] = {
 	{ SDLK_HOME, SDLK_END, 0, SDLK_F1, SDLK_F2, SDLK_F3, SDLK_F4, SDLK_F5 },
@@ -799,7 +797,7 @@ int ms_run(ms_ctx* ms)
 						debug_dasm(ms);
 					}
 					if (z80ex_get_reg(ms->z80, regPC) == ms->bp) {
-						debug_console = 1;
+						ms->debugger_state |= MS_DBG_ON;
 						break;
 					}
 					tstate_counter += z80ex_step(ms->z80);
