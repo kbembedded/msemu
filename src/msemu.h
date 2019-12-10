@@ -1,11 +1,17 @@
 #ifndef __MSEMU_H_
 #define __MSEMU_H_
 
-#include <string.h>
-#include <stdint.h>
 #include <z80ex/z80ex.h>
 
 #define	MEBIBYTE	0x100000
+
+// Return codes
+#define MS_OK    0
+#define MS_ERR   1
+
+// Debugger Flags
+#define MS_DBG_ON           1 << 0
+#define MS_DBG_SINGLE_STEP  1 << 1
 
 // Default screen size
 #define MS_LCD_WIDTH 	320
@@ -16,12 +22,12 @@
 #define MS_POWERSTATE_OFF 0
 
 enum ms_dev_map {
-	CF 		= 0x00,
-	RAM 		= 0x01,
-	LCD_L 		= 0x02,
-	DF 		= 0x03,
-	LCD_R 		= 0x04,
-	MODEM 		= 0x05,
+	CF    = 0x00,
+	RAM   = 0x01,
+	LCD_L = 0x02,
+	DF    = 0x03,
+	LCD_R = 0x04,
+	MODEM = 0x05,
 
 	DEV_CNT,
 };
@@ -73,7 +79,7 @@ enum ms_port_map {
 				    */
 };
 
-typedef struct mshw {
+typedef struct ms_hw {
 	Z80EX_CONTEXT* z80;
 
 	uintptr_t slot_map[4];
@@ -107,8 +113,38 @@ typedef struct mshw {
 	// Holds current power state (on or off)
 	uint8_t power_state;
 
+	// Holds debugging state (on or off)
+	uint8_t debugger_state;
+
 	// Single breakpoint on a specified PC
 	int32_t bp;
-} MSHW;
+} ms_ctx;
+
+typedef struct ms_opts {
+	// Codeflash path
+	char* cf_path;
+
+	// Dataflash path
+	char* df_path;
+} ms_opts;
+
+/**
+ * Initializes a mailstation emulator.
+ *
+ * ms      - ref to mailstation emulator
+ * options - initialization options
+ *
+ * Returns `MS_OK` on success, error code on failure
+ */
+int ms_init(ms_ctx* ms, ms_opts* options);
+
+/**
+ * Runs the mailstation emulation
+ *
+ * ms - ref to mailstation emulator
+ *
+ * Returns `MS_OK` on success, error code on failure
+ */
+int ms_run(ms_ctx* ms);
 
 #endif // __MSEMU_H_

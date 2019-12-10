@@ -1,8 +1,8 @@
 #include "flashops.h"
 
+#include <string.h>
 #include "msemu.h"
 #include "logger.h"
-#include <z80ex/z80ex.h>
 
 /* Write a byte to dataflash while handling commands intended for 28SF040 flash
  *
@@ -16,7 +16,7 @@
  *
  * TODO: Add debugging hook here.
  */
-int8_t writeDataflash(MSHW* ms, unsigned int translated_addr, uint8_t val)
+int8_t writeDataflash(ms_ctx* ms, unsigned int translated_addr, uint8_t val)
 {
 	static uint8_t cycle;
 	static uint8_t cmd;

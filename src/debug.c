@@ -1,11 +1,12 @@
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "debug.h"
-#include "msemu.h"
 #include "logger.h"
+#include "msemu.h"
 
 #include <z80ex/z80ex_dasm.h>
 
@@ -17,7 +18,8 @@ static void examine(void *nan);
 static void force_on(void *nan);
 static void force_off(void *nan);
 
-static MSHW *ms_debug;
+static ms_ctx *ms_debug;
+static struct sigaction sigact;
 
 static const struct cmdtable cmds[] = {
 	{ "q", 1, leave_prompt, "[Q]uit emulation and exit completely", no_arg },
@@ -70,8 +72,26 @@ static void examine(void *nan)
 {
 }
 
+/* Debug support */
+void sigint(int sig)
+{
+	if (ms_debug) {
+		ms_debug->debugger_state |= MS_DBG_ON;
+	}
 
-int debug_prompt(MSHW *ms)
+	printf("\nReceived SIGINT, interrupting\n");
+}
+
+void debug_init(ms_ctx* ms)
+{
+	ms_debug = ms;
+
+	// Override ctrl+c to drop to debug console
+	sigact.sa_handler = sigint;
+	sigaction(SIGINT, &sigact, NULL);
+}
+
+int debug_prompt(ms_ctx *ms)
 {
 	static int print_warn = 0;
 	int i;
@@ -119,12 +139,12 @@ int debug_prompt(MSHW *ms)
 
 Z80EX_BYTE z80ex_dasm_readbyte (Z80EX_WORD addr, void *user_data)
 {
-	MSHW* ms = (MSHW*)user_data;
+	ms_ctx* ms = (ms_ctx*)user_data;
 	return *(uint8_t *)(ms->slot_map[((addr & 0xC000) >> 14)] +
 	  (addr & 0x3FFF));
 }
 
-void debug_dasm(MSHW *ms)
+void debug_dasm(ms_ctx *ms)
 {
         int dasm_buffer_len = 256;
         char dasm_buffer[dasm_buffer_len];

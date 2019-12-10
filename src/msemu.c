@@ -6,14 +6,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <getopt.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>
 #include <time.h>
-#include <unistd.h>
-#include <signal.h>
-#include "rawcga.h"
 #include "logger.h"
 #include "msemu.h"
 #include "flashops.h"
@@ -21,15 +14,12 @@
 #include "debug.h"
 
 #include <SDL/SDL.h>
-#include <SDL/SDL_rotozoom.h>
 #include <z80ex/z80ex.h>
 #include <z80ex/z80ex_dasm.h>
 
 // Default entry of color palette to draw Mailstation LCD with
 uint8_t LCD_fg_color = 3;  // LCD black
 uint8_t LCD_bg_color = 2;  // LCD green
-
-int debug_console;
 
 // This table translates PC scancodes to the Mailstation key matrix
 int32_t keyTranslateTable[10][8] = {
@@ -61,7 +51,7 @@ unsigned char hex2bcd (unsigned char x)
 //
 //  Disables emulation, displays opening screen
 //
-void powerOff(MSHW* ms)
+void powerOff(ms_ctx* ms)
 {
 	ms->power_state = MS_POWERSTATE_OFF;
 
@@ -74,7 +64,7 @@ void powerOff(MSHW* ms)
 //
 //  Emulates writing to Mailstation LCD device
 //
-void writeLCD(MSHW* ms, uint16_t newaddr, uint8_t val, int lcdnum)
+void writeLCD(ms_ctx* ms, uint16_t newaddr, uint8_t val, int lcdnum)
 {
 	uint8_t *lcd_ptr;
 	if (lcdnum == LCD_L) lcd_ptr = ms->lcd_dat1bit;
@@ -129,7 +119,7 @@ void writeLCD(MSHW* ms, uint16_t newaddr, uint8_t val, int lcdnum)
 //
 //  Emulates reading from Mailstation LCD
 //
-uint8_t readLCD(MSHW* ms, uint16_t newaddr, int lcdnum)
+uint8_t readLCD(ms_ctx* ms, uint16_t newaddr, int lcdnum)
 {
 	uint8_t *lcd_ptr;
 	uint8_t ret;
@@ -173,7 +163,7 @@ Z80EX_BYTE z80ex_mread(
 {
 
 	Z80EX_BYTE ret;
-	MSHW* ms = (MSHW*)user_data;
+	ms_ctx* ms = (ms_ctx*)user_data;
 	int slot = ((addr & 0xC000) >> 14);
 	int dev = 0xFF;
 
@@ -253,7 +243,7 @@ void z80ex_mwrite(
 	void *user_data)
 {
 
-	MSHW* ms = (MSHW*)user_data;
+	ms_ctx* ms = (ms_ctx*)user_data;
 	int slot = ((addr & 0xC000) >> 14);
 	int dev = 0xFF, page = 0xFF;
 
@@ -341,7 +331,7 @@ Z80EX_BYTE z80ex_pread (
 	void *user_data)
 {
 
-	MSHW* ms = (MSHW*)user_data;
+	ms_ctx* ms = (ms_ctx*)user_data;
 
 	time_t theTime;
 	struct tm *rtc_time = NULL;
@@ -461,7 +451,7 @@ void z80ex_pwrite (
 	void *user_data)
 {
 
-	MSHW* ms = (MSHW*)user_data;
+	ms_ctx* ms = (ms_ctx*)user_data;
 	static uint8_t tmp_reg;
 
 
@@ -545,7 +535,7 @@ void z80ex_pwrite (
  * anyway? Right now the declaration looks crowded and would need some rework
  * already.
  */
-void generateKeyboardMatrix(MSHW* ms, int scancode, int eventtype)
+void generateKeyboardMatrix(ms_ctx* ms, int scancode, int eventtype)
 {
 	uint32_t i = 0;
 	int32_t *keytbl_ptr = &keyTranslateTable[0][0];
@@ -591,7 +581,7 @@ Z80EX_BYTE z80ex_intread (
  * 0x0066 would not have a valid instruction. This hints that there is some
  * expectation of an NMI occurring.
  */
-int process_interrupts (MSHW* ms)
+int process_interrupts (ms_ctx* ms)
 {
 	static int icount = 0;
 
@@ -623,7 +613,7 @@ int process_interrupts (MSHW* ms)
 //
 //  Resets Mailstation state
 //
-void resetMailstation(MSHW* ms)
+void resetMailstation(ms_ctx* ms)
 {
 	memset(ms->lcd_dat8bit, 0, 320*240);
 	memset(ms->io, 0, 64 * 1024);
@@ -635,117 +625,8 @@ void resetMailstation(MSHW* ms)
 	z80ex_reset(ms->z80);
 }
 
-/* Debug support */
-void sigint(int sig)
+int ms_init(ms_ctx* ms, ms_opts* options)
 {
-	debug_console = 1;
-	printf("\nReceived SIGINT, interrupting\n");
-}
-
-void usage(const char *path_arg, const char *cf_path, const char *df_path)
-{
-	printf(
-	  "\nMailstation Emulator\n\n"
-
-	  "Usage: \n"
-	  "  %s [-c <path] [-d <path> [-n]] [-l <path>] [-v]\n"
-	  "  %s -h | --help\n\n"
-
-	  "Options:\n"
-	  "  -c <path>, --codeflash <path>  Path to codeflash ROM (def: %s)\n"
-	  "  -d <path>, --dataflash <path>  Path to dataflash ROM (def: %s)\n"
-	  "  -n                             Don't write changes back to disk\n"
-	  "  -l <path>, --logfile <path>    Output debug info to <path>\n"
-	  "  -v, --verbose                  Output debug info to terminal\n"
-	  "  -h, --help                     This usage information\n\n"
-
-	  "Debugger:\n"
-	  "  When running, press ctrl+c on the terminal window to halt exec\n"
-	  "  and drop to interactive debug shell. Use the command 'h' while\n"
-	  "  in the shell for further help output regarding debugger use\n\n",
-	  path_arg, path_arg, cf_path, df_path);
-}
-
-/* Main
- *
- */
-int main(int argc, char *argv[])
-{
-	char *codeflash_path = "codeflash.bin";
-	char *dataflash_path = "dataflash.bin";
-	int opt_nodfwrite = 0;
-	char* logpath = NULL;
-	int c;
-	int ret = 0;
-	int opt_verbose = 0;
-	int single_step = 0;
-
-	MSHW ms;
-	int execute_counter = 0;
-	int tstate_counter = 0;
-	/* XXX: interrupt_period can change if running at different freq */
-	int interrupt_period = 187500;
-	int exitemu = 0;
-	uint32_t lasttick = SDL_GetTicks();
-	uint32_t currenttick;
-	SDL_Event event;
-
-	struct sigaction sigact;
-
-	static struct option long_opts[] = {
-	  { "help", no_argument, NULL, 'h' },
-	  { "codeflash", required_argument, NULL, 'c' },
-	  { "dataflash", required_argument, NULL, 'd' },
-	  { "logfile", optional_argument, NULL, 'l' },
-	  { "verbose", no_argument, NULL, 'v' },
-	/* TODO: Add argument to start with debug console open, e.g. execution
-	 * halted.
-	 */
-	  { NULL, no_argument, NULL, 0}
-	};
-
-	/* TODO:
-	 *   Rework main and break out in to smaller functions.
-	 *   Set up buffers and parse files
-	 *   Set up SDL calls
-	 *   Then get in to loop
-	 */
-
-	/* Process arguments */
-	while ((c = getopt_long(argc, argv,
-	  "hc:d:l:vn", long_opts, NULL)) != -1) {
-		switch(c) {
-		  case 'c':
-			codeflash_path = malloc(strlen(optarg)+1);
-			/* TODO: Implement error handling here */
-			strncpy(codeflash_path, optarg, strlen(optarg)+1);
-			break;
-		  case 'd':
-			dataflash_path = malloc(strlen(optarg)+1);
-			/* TODO: Implement error handling here */
-			strncpy(dataflash_path, optarg, strlen(optarg)+1);
-			break;
-		  case 'n':
-			opt_nodfwrite = 1;
-			break;
-		  case 'l':
-			logpath = malloc(strlen(optarg) + 1);
-			/* TODO: Implement error handling here */
-			strncpy(logpath, optarg, strlen(optarg) + 1);
-		  	break;
-		  case 'v':
-			opt_verbose = 1;
-			break;
-		  case 'h':
-		  default:
-			usage(argv[0], codeflash_path, dataflash_path);
-			return 1;
-		}
-	}
-
-	// Initialize logging
-	log_init(logpath, opt_verbose);
-
 	/* Allocate and clear buffers.
 	 * Codeflash is 1 MiB
 	 * Dataflash is 512 KiB
@@ -756,36 +637,44 @@ int main(int argc, char *argv[])
 	 *
 	 * TODO: Add error checking on the buffer allocation
 	 */
-	ms.dev_map[CF] = (uintptr_t)calloc(MEBIBYTE, sizeof(uint8_t));
-	ms.dev_map[DF] = (uintptr_t)calloc(MEBIBYTE/2, sizeof(uint8_t));
-	ms.dev_map[RAM] = (uintptr_t)calloc(MEBIBYTE/8, sizeof(uint8_t));
-	ms.io = (uint8_t *)calloc(MEBIBYTE/16, sizeof(uint8_t));
-	ms.lcd_dat1bit = (uint8_t *)calloc(((MS_LCD_WIDTH * MS_LCD_HEIGHT) / 8),
+	ms->dev_map[CF] = (uintptr_t)calloc(MEBIBYTE, sizeof(uint8_t));
+	ms->dev_map[DF] = (uintptr_t)calloc(MEBIBYTE/2, sizeof(uint8_t));
+	ms->dev_map[RAM] = (uintptr_t)calloc(MEBIBYTE/8, sizeof(uint8_t));
+	ms->io = (uint8_t *)calloc(MEBIBYTE/16, sizeof(uint8_t));
+	ms->lcd_dat1bit = (uint8_t *)calloc(((MS_LCD_WIDTH * MS_LCD_HEIGHT) / 8),
 	  sizeof(uint8_t));
 	/* XXX: MAGIC NUMBEERRRR */
-	/* ms.dev_map[LCD_R] = ms.dev_map[LCD_L] + 4800; */
-	ms.lcd_dat8bit = (uint8_t *)calloc(  MS_LCD_WIDTH * MS_LCD_HEIGHT,
+	/* ms->dev_map[LCD_R] = ms->dev_map[LCD_L] + 4800; */
+	ms->lcd_dat8bit = (uint8_t *)calloc(  MS_LCD_WIDTH * MS_LCD_HEIGHT,
 	  sizeof(uint8_t));
 
 	/* Initialize flags. */
-	ms.lcd_lastupdate = 0;
-	ms.lcd_cas = 0;
-	ms.dataflash_updated = 0;
-	ms.interrupt_mask = 0;
-	ms.power_button = 0;
-	ms.power_state = MS_POWERSTATE_OFF;
-	ms.bp = -1;
+	ms->lcd_lastupdate = 0;
+	ms->lcd_cas = 0;
+	ms->dataflash_updated = 0;
+	ms->interrupt_mask = 0;
+	ms->power_button = 0;
+	ms->power_state = MS_POWERSTATE_OFF;
+	ms->bp = -1;
 
 	/* Initialize the slot_map */
-	ms.slot_map[0] = ms.dev_map[CF]; /* slot0000 is always CF_0 */
-	ms.slot_map[1] = ms.dev_map[((ms.io[SLOT4_DEV]) & 0x0F)] +
-	  (ms.io[SLOT4_PAGE] * 0x4000);
-	ms.slot_map[2] = ms.dev_map[((ms.io[SLOT8_DEV]) & 0x0F)] +
-	  (ms.io[SLOT8_PAGE] * 0x4000);
-	ms.slot_map[3] = ms.dev_map[RAM]; /* slotC000 is always RAM_0 */
+	ms->slot_map[0] = ms->dev_map[CF]; /* slot0000 is always CF_0 */
+	ms->slot_map[1] = ms->dev_map[((ms->io[SLOT4_DEV]) & 0x0F)] +
+	  (ms->io[SLOT4_PAGE] * 0x4000);
+	ms->slot_map[2] = ms->dev_map[((ms->io[SLOT8_DEV]) & 0x0F)] +
+	  (ms->io[SLOT8_PAGE] * 0x4000);
+	ms->slot_map[3] = ms->dev_map[RAM]; /* slotC000 is always RAM_0 */
 
 	/* Set up keyboard emulation array */
-	memset(ms.key_matrix, 0xff, sizeof(ms.key_matrix));
+	memset(ms->key_matrix, 0xff, sizeof(ms->key_matrix));
+
+	ms->z80 = z80ex_create(
+		z80ex_mread, (void*)ms,
+		z80ex_mwrite, (void*)ms,
+		z80ex_pread, (void*)ms,
+		z80ex_pwrite, (void*)ms,
+		z80ex_intread, (void*)ms
+	);
 
 	/* Open codeflash and dump it in to a buffer.
 	 * The codeflash should be exactly 1 MiB.
@@ -794,11 +683,11 @@ int main(int argc, char *argv[])
 	 * It should never be longer either. If it is, we just pretend like
 	 * we didn't notice. This might be unwise behavior.
 	 */
-	if (!flashtobuf((uint8_t *)ms.dev_map[CF], codeflash_path, MEBIBYTE)) {
-		log_error("Failed to load codeflash at '%s'. Aborting.\n", codeflash_path);
-		abort();
+	if (!flashtobuf((uint8_t *)ms->dev_map[CF], options->cf_path, MEBIBYTE)) {
+		log_error("Failed to load codeflash at '%s'. Aborting.\n", options->cf_path);
+		return MS_ERR;
 	}
-	printf("Codeflash loaded from '%s'.\n", codeflash_path);
+	printf("Codeflash loaded from '%s'.\n", options->cf_path);
 
 	/* Open dataflash and dump it in to a buffer.
 	 * The dataflash should be exactly 512 KiB.
@@ -809,25 +698,26 @@ int main(int argc, char *argv[])
 	 * If the dataflash image does not exist, it will be created when
 	 * the dataflash is written to disk.
 	 */
-	if (!flashtobuf((uint8_t *)ms.dev_map[DF], dataflash_path, MEBIBYTE/2)) {
-		printf("Existing dataflash image not found at '%s'.\n", dataflash_path);
+	if (!flashtobuf((uint8_t *)ms->dev_map[DF], options->df_path, MEBIBYTE/2)) {
+		printf("Existing dataflash image not found at '%s'.\n", options->df_path);
 	}
-	printf("Dataflash will be saved to '%s' on exit.\n", dataflash_path);
 
+	return MS_OK;
+}
 
-	/* TODO: Add git tags to this, because thats neat */
-	printf("\nMailstation Emulator v0.2\n");
-	printf("\nPress ctrl+c to enter interactive Mailstation debugger\n");
+int ms_run(ms_ctx* ms)
+{
+	// TODO: Consider removing dependency on SDL here and having
+	//     hooks for the UI code to attach to instead.
 
-	ui_init(&raw_cga_array[0], ms.lcd_dat8bit);
-
-	ms.z80 = z80ex_create(
-		z80ex_mread, (void*)&ms,
-		z80ex_mwrite, (void*)&ms,
-		z80ex_pread, (void*)&ms,
-		z80ex_pwrite, (void*)&ms,
-		z80ex_intread, (void*)&ms
-	);
+	int execute_counter = 0;
+	int tstate_counter = 0;
+	/* XXX: interrupt_period can change if running at different freq */
+	int interrupt_period = 187500;
+	int exitemu = 0;
+	uint32_t lasttick = SDL_GetTicks();
+	uint32_t currenttick;
+	SDL_Event event;
 
 	/* NOTE:
 	 * The z80ex library can hook in to RETI opcodes. Allowing us to exec
@@ -835,28 +725,22 @@ int main(int argc, char *argv[])
 	 * there is any reason to need this.
 	 */
 
-	/* Override ctrl+c to drop to debug console */
-	sigact.sa_handler = sigint;
-	sigaction(SIGINT, &sigact, NULL);
-
 	// Display startup message
-	powerOff(&ms);
+	powerOff(ms);
 
 	lasttick = SDL_GetTicks();
 
 	while (!exitemu)
 	{
-		if (debug_console) {
-			switch (debug_prompt(&ms)) {
+		if (ms->debugger_state & MS_DBG_ON) {
+			switch (debug_prompt(ms)) {
 			  case -1: /* Quit */
 				exitemu = 1;
 			  case 0: /* Continue */
-				debug_console = 0;
-				single_step = 0;
+				ms->debugger_state &= ~(MS_DBG_ON | MS_DBG_SINGLE_STEP);
 				break;
 			  case 1: /* Single step */
-				debug_console = 1;
-				single_step = 1;
+				ms->debugger_state |= MS_DBG_ON | MS_DBG_SINGLE_STEP;
 				break;
 			}
 		}
@@ -887,9 +771,9 @@ int main(int argc, char *argv[])
 		 * the PC is hit. Interrupting with ctrl+c in terminal or esc
 		 * on the SDL window will only occur after this loop has
 		 * completed.*/
-		if (ms.power_state == MS_POWERSTATE_ON) {
+		if (ms->power_state == MS_POWERSTATE_ON) {
 			execute_counter += currenttick - lasttick;
-			if (single_step) {
+			if (ms->debugger_state & MS_DBG_SINGLE_STEP) {
 				/* Force verbose output for single step */
 				log_push(1);
 				do {
@@ -897,31 +781,31 @@ int main(int argc, char *argv[])
 					 * of a full opcode, therefore need to
 					 * check that the last step was not a
 					 * prefix but a full instruction */
-					if (!z80ex_last_op_type(ms.z80)) {
-						debug_dasm(&ms);
+					if (!z80ex_last_op_type(ms->z80)) {
+						debug_dasm(ms);
 					}
-					tstate_counter += z80ex_step(ms.z80);
-				} while (z80ex_last_op_type(ms.z80));
+					tstate_counter += z80ex_step(ms->z80);
+				} while (z80ex_last_op_type(ms->z80));
 				/* Restore prior verbosity level */
 				log_pop();
 
 			} else if (execute_counter > 15) {
 				execute_counter = 0;
 				while (tstate_counter < interrupt_period ||
-				  z80ex_last_op_type(ms.z80)) {
-					if (log_isverbose() && !z80ex_last_op_type(ms.z80)){
-						debug_dasm(&ms);
+				  z80ex_last_op_type(ms->z80)) {
+					if (log_isverbose() && !z80ex_last_op_type(ms->z80)){
+						debug_dasm(ms);
 					}
-					if (z80ex_get_reg(ms.z80, regPC) == ms.bp) {
-						debug_console = 1;
+					if (z80ex_get_reg(ms->z80, regPC) == ms->bp) {
+						ms->debugger_state |= MS_DBG_ON;
 						break;
 					}
-					tstate_counter += z80ex_step(ms.z80);
+					tstate_counter += z80ex_step(ms->z80);
 				}
 			}
 
 			if (tstate_counter >= interrupt_period) {
-				tstate_counter += process_interrupts(&ms);
+				tstate_counter += process_interrupts(ms);
 				tstate_counter %= interrupt_period;
 			}
 
@@ -932,10 +816,10 @@ int main(int argc, char *argv[])
 		/* NOTE: Cursory glance suggests the screen updates 20ms after
 		 * the screen array changed.
 		 */
-		if (ms.power_state == MS_POWERSTATE_ON && (ms.lcd_lastupdate != 0) &&
-		  (currenttick - ms.lcd_lastupdate >= 20)) {
+		if (ms->power_state == MS_POWERSTATE_ON && (ms->lcd_lastupdate != 0) &&
+		  (currenttick - ms->lcd_lastupdate >= 20)) {
 			ui_drawLCD();
-			ms.lcd_lastupdate = 0;
+			ms->lcd_lastupdate = 0;
 		}
 
 		/* XXX: All of this needs to be reworked to be far more
@@ -956,15 +840,15 @@ int main(int argc, char *argv[])
 			{
 				if (event.type == SDL_KEYDOWN)
 				{
-					ms.power_button = 1;
-					if (ms.power_state == MS_POWERSTATE_OFF)
+					ms->power_button = 1;
+					if (ms->power_state == MS_POWERSTATE_OFF)
 					{
 						printf("POWER ON\n");
 
-						resetMailstation(&ms);
+						resetMailstation(ms);
 					}
 				} else {
-					ms.power_button = 0;
+					ms->power_button = 0;
 				}
 			}
 
@@ -979,8 +863,8 @@ int main(int argc, char *argv[])
 						switch (event.key.keysym.sym) {
 						  /* Reset whole system */
 						  case SDLK_r:
-							if (ms.power_state == MS_POWERSTATE_ON)
-							  resetMailstation(&ms);
+							if (ms->power_state == MS_POWERSTATE_ON)
+							  resetMailstation(ms);
 							break;
 						  default:
 							break;
@@ -988,7 +872,7 @@ int main(int argc, char *argv[])
 					}
 				} else {
 					/* Proces the key for the MS */
-					generateKeyboardMatrix(&ms, event.key.keysym.sym, event.type);
+					generateKeyboardMatrix(ms, event.key.keysym.sym, event.type);
 				}
 			}
 		}
@@ -996,23 +880,5 @@ int main(int argc, char *argv[])
 		lasttick = currenttick;
 	}
 
-	/* Write dataflash buffer to disk if it was modified */
-	if (ms.dataflash_updated) {
-		if (opt_nodfwrite) {
-			log_error("Not writing modified dataflash to disk!\n");
-		} else {
-			log_error("Writing dataflash buffer to disk\n");
-			ret = buftoflash((uint8_t *)ms.dev_map[DF],
-			  dataflash_path, MEBIBYTE/2);
-			if (ret < MEBIBYTE/2) {
-				log_error(
-				  "Failed writing dataflash, only wrote %d\n",
-				  ret);
-			}
-		}
-	}
-
-	log_shutdown();
-
-	return 0;
+	return MS_OK;
 }

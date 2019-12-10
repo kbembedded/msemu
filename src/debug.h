@@ -1,7 +1,6 @@
 #ifndef __DEBUG_H__
 #define __DEBUG_H__
 
-#include <stdio.h>
 #include "msemu.h"
 
 enum arguments {
@@ -17,7 +16,8 @@ struct cmdtable {
 	char arg;
 };
 
-int debug_prompt(MSHW *ms);
-void debug_dasm(MSHW *ms);
+void debug_init(ms_ctx *ms);
+int debug_prompt(ms_ctx *ms);
+void debug_dasm(ms_ctx *ms);
 
 #endif
