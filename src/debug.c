@@ -4,35 +4,63 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "debug.h"
 #include "logger.h"
 #include "msemu.h"
 
 #include <z80ex/z80ex_dasm.h>
+#include <z80ex/z80ex.h>
+
+enum arguments {
+	no_arg = 0,
+	int_arg = 1,
+};
+
+struct cmdtable {
+	const char *cmd;
+	uint8_t cmdlen;
+	void (*func)(void *);
+	const char *doc;
+	char arg;
+};
+
+typedef struct debug_bp {
+	int32_t mr;
+	int32_t mw;
+	int32_t pc;
+	int32_t hits;
+} debug_bp;
+
+z80ex_mread_cb ms_mread;
+
+static ms_ctx *ms_debug;
+static debug_bp bp;
+static struct sigaction sigact;
 
 static void leave_prompt(void *nan);
 static void help(void *nan);
 static void list_bp(void *nan);
-static void set_bp(void *nan);
+static void set_bpc(void *nan);
 static void examine(void *nan);
 static void force_on(void *nan);
 static void force_off(void *nan);
-
-static ms_ctx *ms_debug;
-static struct sigaction sigact;
 
 static const struct cmdtable cmds[] = {
 	{ "q", 1, leave_prompt, "[Q]uit emulation and exit completely", no_arg },
 	{ "c", 1, leave_prompt, "[C]ontinue execution", no_arg },
 	{ "s", 1, leave_prompt, "[S]ingle step execution", no_arg },
 	{ "h", 1, help, "Display this [H]elp menu", no_arg },
-	{ "l", 1, list_bp, "[L]ist the current breakpoint", no_arg },
-	{ "b", 1, set_bp, "Set a [B]reakpoint on PC, \'b <PC>\', -1 to disable", int_arg },
-	{ "e", 1, examine, "[E]xamine current registers", no_arg },
+	{ "l", 1, list_bp, "[L]ist the current breakpoints", no_arg },
+	{ "bpc", 3, set_bpc, "Breakpoint on PC, -1 to disable", int_arg },
+	{ "bmw", 3, set_bpc, "Breakpoint on mem write, -1 to disable",
+	  int_arg },
+	{ "bmr", 3, set_bpc, "Breakpoint on mem read, -1 to disable",
+	  int_arg },
+	{ "e", 1, examine, "[E]xamine current register state", no_arg },
 	{ "o", 1, force_on, "Force debug printing [O]n during exec", no_arg },
 	{ "f", 1, force_off, "Force debug printing o[F]f during exec", no_arg },
 };
 #define NUMCMDS sizeof cmds / sizeof cmds[0]
+
 
 static void leave_prompt(void *nan)
 {
@@ -56,58 +84,59 @@ static void force_off(void *nan)
 	log_set(1);
 }
 
-static void set_bp(void *pc)
+static void set_bpc(void *pc)
 {
 	int32_t new_bp = *(unsigned long *)pc;
 
-	ms_debug->bp = new_bp;
+	bp.pc = new_bp;
 }
 
 static void list_bp(void *nan)
 {
-	printf("BP is 0x%04X\n", ms_debug->bp);
+	printf("BP is 0x%04X\n", bp.pc);
 }
 
 static void examine(void *nan)
 {
+	/* TODO: In addition to regs, also list current slot mapping */
 }
 
 /* Debug support */
 void sigint(int sig)
 {
-	if (ms_debug) {
-		ms_debug->debugger_state |= MS_DBG_ON;
-	}
-
+	bp.hits++;
 	printf("\nReceived SIGINT, interrupting\n");
 }
 
-void debug_init(ms_ctx* ms)
+/* XXX: Set this up to also be passed the FP for readbyte */
+void debug_init(ms_ctx* ms, z80ex_mread_cb z80ex_mread)
 {
 	ms_debug = ms;
+	ms_mread = z80ex_mread;
+
+	bp.pc = -1;
+	bp.mr = -1;
+	bp.mw = -1;
+	bp.hits = 0;
 
 	// Override ctrl+c to drop to debug console
 	sigact.sa_handler = sigint;
 	sigaction(SIGINT, &sigact, NULL);
 }
 
-int debug_prompt(ms_ctx *ms)
+int debug_prompt(void)
 {
 	static int print_warn = 0;
 	int i;
 	unsigned long int val;
-	char buf[10];
+	char buf[32];
 
-	ms_debug = ms;
+	bp.hits = 0;
 
 	if (!print_warn) {
-		printf("NOTE! THIS DEBUGGER IS ROUGH AND WILL LET YOU SHOOT YOURSELF "
-		  "IN THE FOOT!\n");
+		printf("NOTE! THIS DEBUGGER IS ROUGH AND WILL LET YOU SHOOT "
+		  "YOURSELF IN THE FOOT!\n");
 		print_warn = 1;
-	}
-
-	if (ms_debug->bp == z80ex_get_reg(ms->z80, regPC)) {
-		printf("Reached breakpoint on PC, 0x%04X\n", ms_debug->bp);
 	}
 
 	while (1) {
@@ -120,13 +149,16 @@ int debug_prompt(ms_ctx *ms)
 			if(!strncmp(buf, cmds[i].cmd, cmds[i].cmdlen)) {
 				if (i == 0) return -1; /* Hack, "q" */
 				if (i == 1) return 0;  /* Hack, "c" */
-				if (i == 2) return 1;  /* Hack, "s" */
+				if (i == 2) {
+					bp.hits++;
+					return 1;  /* Hack, "s" */
+				}
 				switch (cmds[i].arg) {
 				  case no_arg:
 					cmds[i].func(0);
 					break;
 				  case int_arg:
-					val = strtoul(&(buf[cmds[i].cmdlen+1]), 0, 0);
+					val = strtoul(&(buf[cmds[i].cmdlen]), 0, 0);
 					cmds[i].func(&val);
 					break;
 				  default:
@@ -137,14 +169,12 @@ int debug_prompt(ms_ctx *ms)
 	}
 }
 
-Z80EX_BYTE z80ex_dasm_readbyte (Z80EX_WORD addr, void *user_data)
+Z80EX_BYTE debug_dasm_readbyte (Z80EX_WORD addr, void *user_data)
 {
-	ms_ctx* ms = (ms_ctx*)user_data;
-	return *(uint8_t *)(ms->slot_map[((addr & 0xC000) >> 14)] +
-	  (addr & 0x3FFF));
+	return ms_mread(ms_debug->z80, addr, 0, user_data);
 }
 
-void debug_dasm(ms_ctx *ms)
+void debug_dasm(void)
 {
         int dasm_buffer_len = 256;
         char dasm_buffer[dasm_buffer_len];
@@ -156,13 +186,28 @@ void debug_dasm(ms_ctx *ms)
 	  &dasm_buffer[0], dasm_buffer_len,
 	  0,
 	  &dasm_tstates, &dasm_tstates2,
-	  z80ex_dasm_readbyte,
-	  z80ex_get_reg(ms->z80, regPC),
-	  ms);
+	  debug_dasm_readbyte,
+	  z80ex_get_reg(ms_debug->z80, regPC),
+	  ms_debug);
 	log_debug("%-15s  t=%d", dasm_buffer, dasm_tstates);
 	if(dasm_tstates2) {
 		log_debug("/%d", dasm_tstates2);
 	}
 	log_debug("\n");
 
+}
+
+int debug_isbreak(void)
+{
+	return !!bp.hits;
+}
+
+int debug_testbp(void)
+{
+	if (bp.pc == z80ex_get_reg(ms_debug->z80, regPC)) {
+		printf("Reached breakpoint on PC, 0x%04X\n", bp.pc);
+		bp.hits++;
+	}
+
+	return debug_isbreak();
 }

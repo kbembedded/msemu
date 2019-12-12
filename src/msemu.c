@@ -656,7 +656,6 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	ms->interrupt_mask = 0;
 	ms->power_button = 0;
 	ms->power_state = MS_POWERSTATE_OFF;
-	ms->bp = -1;
 
 	/* Initialize the slot_map */
 	ms->slot_map[0] = ms->dev_map[CF]; /* slot0000 is always CF_0 */
@@ -716,6 +715,9 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 		}
 	}
 
+	/* Set up debug hooks */
+	debug_init(ms, z80ex_mread);
+
 	/* TODO: Add git tags to this, because thats neat */
 	printf("\nMailstation Emulator v0.2\n");
 	printf("\nPress ctrl+c to enter interactive Mailstation debugger\n");
@@ -750,15 +752,10 @@ int ms_run(ms_ctx* ms)
 
 	while (!exitemu)
 	{
-		if (ms->debugger_state & MS_DBG_ON) {
-			switch (debug_prompt(ms)) {
+		if (debug_isbreak()) {
+			switch (debug_prompt()) {
 			  case -1: /* Quit */
 				exitemu = 1;
-			  case 0: /* Continue */
-				ms->debugger_state &= ~(MS_DBG_ON | MS_DBG_SINGLE_STEP);
-				break;
-			  case 1: /* Single step */
-				ms->debugger_state |= MS_DBG_ON | MS_DBG_SINGLE_STEP;
 				break;
 			}
 		}
@@ -791,7 +788,7 @@ int ms_run(ms_ctx* ms)
 		 * completed.*/
 		if (ms->power_state == MS_POWERSTATE_ON) {
 			execute_counter += currenttick - lasttick;
-			if (ms->debugger_state & MS_DBG_SINGLE_STEP) {
+			if (debug_isbreak()) {
 				/* Force verbose output for single step */
 				log_push(1);
 				do {
@@ -800,7 +797,7 @@ int ms_run(ms_ctx* ms)
 					 * check that the last step was not a
 					 * prefix but a full instruction */
 					if (!z80ex_last_op_type(ms->z80)) {
-						debug_dasm(ms);
+						debug_dasm();
 					}
 					tstate_counter += z80ex_step(ms->z80);
 				} while (z80ex_last_op_type(ms->z80));
@@ -812,12 +809,9 @@ int ms_run(ms_ctx* ms)
 				while (tstate_counter < interrupt_period ||
 				  z80ex_last_op_type(ms->z80)) {
 					if (log_isverbose() && !z80ex_last_op_type(ms->z80)){
-						debug_dasm(ms);
+						debug_dasm();
 					}
-					if (z80ex_get_reg(ms->z80, regPC) == ms->bp) {
-						ms->debugger_state |= MS_DBG_ON;
-						break;
-					}
+					if (debug_testbp()) break;
 					tstate_counter += z80ex_step(ms->z80);
 				}
 			}

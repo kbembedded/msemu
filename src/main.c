@@ -100,8 +100,6 @@ int main(int argc, char** argv)
 	ms_init(&ms, &options);
 	ui_init(ms.lcd_dat8bit);
 
-	debug_init(&ms);
-
 	// Run mailstation
 	ret = ms_run(&ms);
 	if (ret) {

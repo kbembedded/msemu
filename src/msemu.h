@@ -7,10 +7,6 @@
 #define MS_OK    0
 #define MS_ERR   1
 
-// Debugger Flags
-#define MS_DBG_ON           1 << 0
-#define MS_DBG_SINGLE_STEP  1 << 1
-
 // Default screen size
 #define MS_LCD_WIDTH 	320
 #define MS_LCD_HEIGHT	240
@@ -110,12 +106,6 @@ typedef struct ms_hw {
 
 	// Holds current power state (on or off)
 	uint8_t power_state;
-
-	// Holds debugging state (on or off)
-	uint8_t debugger_state;
-
-	// Single breakpoint on a specified PC
-	int32_t bp;
 } ms_ctx;
 
 typedef struct ms_opts {

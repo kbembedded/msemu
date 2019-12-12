@@ -3,21 +3,10 @@
 
 #include "msemu.h"
 
-enum arguments {
-	no_arg = 0,
-	int_arg,
-};
-
-struct cmdtable {
-	const char *cmd;
-	char cmdlen;
-	void (*func)(void *);
-	const char *doc;
-	char arg;
-};
-
-void debug_init(ms_ctx *ms);
-int debug_prompt(ms_ctx *ms);
-void debug_dasm(ms_ctx *ms);
+void debug_init(ms_ctx* ms, z80ex_mread_cb z80ex_mread);
+int debug_prompt(void);
+void debug_dasm(void);
+int debug_testbp(void);
+int debug_isbreak(void);
 
 #endif
