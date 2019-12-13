@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "debug.h"
 #include "logger.h"
 #include "msemu.h"
 
@@ -39,7 +40,9 @@ static struct sigaction sigact;
 static void leave_prompt(void *nan);
 static void help(void *nan);
 static void list_bp(void *nan);
-static void set_bpc(void *nan);
+static void set_bpc(void *pc);
+static void set_bmw(void *addr);
+static void set_bmr(void *addr);
 static void examine(void *nan);
 static void force_on(void *nan);
 static void force_off(void *nan);
@@ -51,9 +54,9 @@ static const struct cmdtable cmds[] = {
 	{ "h", 1, help, "Display this [H]elp menu", no_arg },
 	{ "l", 1, list_bp, "[L]ist the current breakpoints", no_arg },
 	{ "bpc", 3, set_bpc, "Breakpoint on PC, -1 to disable", int_arg },
-	{ "bmw", 3, set_bpc, "Breakpoint on mem write, -1 to disable",
+	{ "bmw", 3, set_bmw, "Breakpoint on mem write, -1 to disable",
 	  int_arg },
-	{ "bmr", 3, set_bpc, "Breakpoint on mem read, -1 to disable",
+	{ "bmr", 3, set_bmr, "Breakpoint on mem read, -1 to disable",
 	  int_arg },
 	{ "e", 1, examine, "[E]xamine current register state", no_arg },
 	{ "o", 1, force_on, "Force debug printing [O]n during exec", no_arg },
@@ -87,13 +90,26 @@ static void force_off(void *nan)
 static void set_bpc(void *pc)
 {
 	int32_t new_bp = *(unsigned long *)pc;
-
 	bp.pc = new_bp;
+}
+
+static void set_bmw(void *addr)
+{
+	int32_t new_bp = *(unsigned long *)addr;
+	bp.mw = new_bp;
+}
+
+static void set_bmr(void *addr)
+{
+	int32_t new_bp = *(unsigned long *)addr;
+	bp.mr = new_bp;
 }
 
 static void list_bp(void *nan)
 {
-	printf("BP is 0x%04X\n", bp.pc);
+	printf("PC breakpoint is 0x%04X\n", bp.pc);
+	printf("MEM read breakpoint is 0x%04X\n", bp.mr);
+	printf("MEM write breakpoint is 0x%04X\n", bp.mw);
 }
 
 static void examine(void *nan)
@@ -202,11 +218,32 @@ int debug_isbreak(void)
 	return !!bp.hits;
 }
 
-int debug_testbp(void)
+int debug_testbp(enum bp_type type, Z80EX_WORD addr)
 {
-	if (bp.pc == z80ex_get_reg(ms_debug->z80, regPC)) {
-		printf("Reached breakpoint on PC, 0x%04X\n", bp.pc);
-		bp.hits++;
+	switch (type) {
+	  case bpPC:
+		if (addr == bp.pc) {
+			printf("Reached breakpoint on PC, 0x%04X\n", bp.pc);
+			bp.hits++;
+		}
+		break;
+	  case bpMR:
+		if (addr == bp.mr) {
+			printf("Reached breakpoint on MEM read, 0x%04X\n",
+			  bp.mr);
+			bp.hits++;
+		}
+		break;
+	  case bpMW:
+		if (addr == bp.mw) {
+			printf("Reached breakpoint on MEM write, 0x%04X\n",
+			  bp.mw);
+			bp.hits++;
+		}
+		break;
+	  default:
+		printf("Invalid breakpoint type!\n");
+		break;
 	}
 
 	return debug_isbreak();

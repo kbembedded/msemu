@@ -168,6 +168,8 @@ Z80EX_BYTE z80ex_mread(
 	int slot = ((addr & 0xC000) >> 14);
 	int dev = 0xFF;
 
+	debug_testbp(bpMR, addr);
+
 	/* slot4 and slot8 are dynamic, if the requested address falls
 	 * in this range, then we need to set up the device we're going
 	 * to talk to. The other two slots are hard-coded and the dev/page
@@ -247,6 +249,8 @@ void z80ex_mwrite(
 	ms_ctx* ms = (ms_ctx*)user_data;
 	int slot = ((addr & 0xC000) >> 14);
 	int dev = 0xFF, page = 0xFF;
+
+	debug_testbp(bpMW, addr);
 
 	/* slot4 and slot8 are dynamic, if the requested address falls
 	 * in this range, then we need to set up the device we're going
@@ -811,7 +815,7 @@ int ms_run(ms_ctx* ms)
 					if (log_isverbose() && !z80ex_last_op_type(ms->z80)){
 						debug_dasm();
 					}
-					if (debug_testbp()) break;
+					if (debug_testbp(bpPC, z80ex_get_reg(ms->z80, regPC))) break;
 					tstate_counter += z80ex_step(ms->z80);
 				}
 			}
