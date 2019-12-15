@@ -33,12 +33,15 @@ typedef struct debug_bp {
 
 z80ex_mread_cb ms_mread;
 
-static ms_ctx *ms_debug;
+static ms_ctx *ms;
 static debug_bp bp;
 static struct sigaction sigact;
+extern const char* const ms_dev_map_text[];
 
 static void leave_prompt(void *nan);
 static void help(void *nan);
+static void md(void *addr);
+static void mw(void *addr);
 static void list_bp(void *nan);
 static void set_bpc(void *pc);
 static void set_bmw(void *addr);
@@ -52,12 +55,15 @@ static const struct cmdtable cmds[] = {
 	{ "c", 1, leave_prompt, "[C]ontinue execution", no_arg },
 	{ "s", 1, leave_prompt, "[S]ingle step execution", no_arg },
 	{ "h", 1, help, "Display this [H]elp menu", no_arg },
+	{ "md", 2, md, "Display memory at address, \'md <addr>\'", int_arg },
+	{ "mw", 2, mw, "Edit memory at address, \'mw <addr> <val>\'", int_arg },
 	{ "l", 1, list_bp, "[L]ist the current breakpoints", no_arg },
-	{ "bpc", 3, set_bpc, "Breakpoint on PC, -1 to disable", int_arg },
-	{ "bmw", 3, set_bmw, "Breakpoint on mem write, -1 to disable",
+	{ "bpc", 3, set_bpc, "Breakpoint on PC, \'bpc <PC>\', -1 to disable",
 	  int_arg },
-	{ "bmr", 3, set_bmr, "Breakpoint on mem read, -1 to disable",
-	  int_arg },
+	{ "bmw", 3, set_bmw, "Breakpoint on mem write, \'bmw <addr>\', "
+	  "-1 to disable", int_arg },
+	{ "bmr", 3, set_bmr, "Breakpoint on mem read, \'bmr <addr>\', "
+	  "-1 to disable", int_arg },
 	{ "e", 1, examine, "[E]xamine current register state", no_arg },
 	{ "o", 1, force_on, "Force debug printing [O]n during exec", no_arg },
 	{ "f", 1, force_off, "Force debug printing o[F]f during exec", no_arg },
@@ -87,6 +93,24 @@ static void force_off(void *nan)
 	log_set(1);
 }
 
+static void md(void *addr)
+{
+	uint16_t new_addr = *(unsigned long *)addr;
+
+	printf("0x%04X: 0x%02X\n", new_addr, ms_mread(ms->z80, new_addr, 0, ms));
+}
+
+static void mw(void *nan)
+{
+}
+
+static void list_bp(void *nan)
+{
+	printf("PC breakpoint is 0x%04X\n", bp.pc);
+	printf("MEM read breakpoint is 0x%04X\n", bp.mr);
+	printf("MEM write breakpoint is 0x%04X\n", bp.mw);
+}
+
 static void set_bpc(void *pc)
 {
 	int32_t new_bp = *(unsigned long *)pc;
@@ -105,16 +129,25 @@ static void set_bmr(void *addr)
 	bp.mr = new_bp;
 }
 
-static void list_bp(void *nan)
-{
-	printf("PC breakpoint is 0x%04X\n", bp.pc);
-	printf("MEM read breakpoint is 0x%04X\n", bp.mr);
-	printf("MEM write breakpoint is 0x%04X\n", bp.mw);
-}
-
 static void examine(void *nan)
 {
 	/* TODO: In addition to regs, also list current slot mapping */
+	printf("AF:  0x%04X\tBC:  0x%04X\tDE:  0x%04X\tHL:  0x%04X\n"
+	       "AF': 0x%04X\tBC': 0x%04X\tDE': 0x%04X\tHL': 0x%04X\n"
+	       "IX:  0x%04X\tIY:  0x%04X\tPC:  0x%04X\tSP:  0x%04X\n"
+	       "I:   0x%02X\tR:   0x%02X\n",
+	z80ex_get_reg(ms->z80,regAF), z80ex_get_reg(ms->z80,regBC),
+	z80ex_get_reg(ms->z80,regDE), z80ex_get_reg(ms->z80,regHL),
+	z80ex_get_reg(ms->z80,regAF_), z80ex_get_reg(ms->z80,regBC_),
+	z80ex_get_reg(ms->z80,regDE_), z80ex_get_reg(ms->z80,regHL_),
+	z80ex_get_reg(ms->z80,regIX), z80ex_get_reg(ms->z80,regIY),
+	z80ex_get_reg(ms->z80,regPC), z80ex_get_reg(ms->z80,regSP),
+	z80ex_get_reg(ms->z80,regI), z80ex_get_reg(ms->z80,regR));
+
+	printf("slot4000: %sp%02d\n", ms_dev_map_text[ms->io[SLOT4_DEV] & 0x0F],
+	  ms->io[SLOT4_PAGE]);
+	printf("slot8000: %sp%02d\n", ms_dev_map_text[ms->io[SLOT8_DEV] & 0x0F],
+	  ms->io[SLOT8_PAGE]);
 }
 
 /* Debug support */
@@ -124,10 +157,9 @@ void sigint(int sig)
 	printf("\nReceived SIGINT, interrupting\n");
 }
 
-/* XXX: Set this up to also be passed the FP for readbyte */
-void debug_init(ms_ctx* ms, z80ex_mread_cb z80ex_mread)
+void debug_init(ms_ctx* msctx, z80ex_mread_cb z80ex_mread)
 {
-	ms_debug = ms;
+	ms = msctx;
 	ms_mread = z80ex_mread;
 
 	bp.pc = -1;
@@ -187,7 +219,7 @@ int debug_prompt(void)
 
 Z80EX_BYTE debug_dasm_readbyte (Z80EX_WORD addr, void *user_data)
 {
-	return ms_mread(ms_debug->z80, addr, 0, user_data);
+	return ms_mread(ms->z80, addr, 0, user_data);
 }
 
 void debug_dasm(void)
@@ -203,8 +235,8 @@ void debug_dasm(void)
 	  0,
 	  &dasm_tstates, &dasm_tstates2,
 	  debug_dasm_readbyte,
-	  z80ex_get_reg(ms_debug->z80, regPC),
-	  ms_debug);
+	  z80ex_get_reg(ms->z80, regPC),
+	  ms);
 	log_debug("%-15s  t=%d", dasm_buffer, dasm_tstates);
 	if(dasm_tstates2) {
 		log_debug("/%d", dasm_tstates2);

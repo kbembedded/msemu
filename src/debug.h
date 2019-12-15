@@ -9,7 +9,7 @@ enum bp_type {
 	bpMW,
 };
 
-void debug_init(ms_ctx* ms, z80ex_mread_cb z80ex_mread);
+void debug_init(ms_ctx* msctx, z80ex_mread_cb z80ex_mread);
 int debug_prompt(void);
 void debug_dasm(void);
 int debug_testbp(enum bp_type type, Z80EX_WORD addr);

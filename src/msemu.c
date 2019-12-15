@@ -36,6 +36,16 @@ int32_t keyTranslateTable[10][8] = {
 	{ SDLK_LCTRL, 0, 0, SDLK_SPACE, 0, 0, SDLK_RSHIFT, SDLK_LEFT }
 };
 
+const char* const ms_dev_map_text[] = {
+	"CF",
+	"RAM",
+	"LCD_L",
+	"DF",
+	"LCD_R",
+	"MODEM",
+	NULL
+};
+
 //----------------------------------------------------------------------------
 //
 //  Convert uint8_t to BCD format
