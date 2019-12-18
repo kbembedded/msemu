@@ -7,7 +7,6 @@
  */
 
 #include <time.h>
-#include "logger.h"
 #include "msemu.h"
 #include "flashops.h"
 #include "ui.h"
@@ -797,36 +796,25 @@ int ms_run(ms_ctx* ms)
 		 * the actual instruction. After this, an INT is attempted.
 		 *
 		 * Execution loop will only stop prematurely if a breakpoint on
-		 * the PC is hit. Interrupting with ctrl+c in terminal or esc
-		 * on the SDL window will only occur after this loop has
+		 * the PC is hit. Interrupting with ctrl+c in terminal will
+		 * cause this loop to exit after the next instruction. Pressing
+		 * esc on the SDL window will only process after this loop has
 		 * completed.*/
 		if (ms->power_state == MS_POWERSTATE_ON) {
 			execute_counter += currenttick - lasttick;
-			if (debug_isbreak()) {
-				/* Force verbose output for single step */
-				log_push(1);
-				do {
-					/* debug_dasm() only works at the start
-					 * of a full opcode, therefore need to
-					 * check that the last step was not a
-					 * prefix but a full instruction */
-					if (!z80ex_last_op_type(ms->z80)) {
-						debug_dasm();
-					}
-					tstate_counter += z80ex_step(ms->z80);
-				} while (z80ex_last_op_type(ms->z80));
-				/* Restore prior verbosity level */
-				log_pop();
+			if (execute_counter > 15 || debug_isbreak()) {
+				if (execute_counter > 15) execute_counter = 0;
 
-			} else if (execute_counter > 15) {
-				execute_counter = 0;
-				while (tstate_counter < interrupt_period ||
-				  z80ex_last_op_type(ms->z80)) {
-					if (log_isverbose() && !z80ex_last_op_type(ms->z80)){
-						debug_dasm();
+				while (tstate_counter < interrupt_period) {
+					debug_dasm();
+					do {
+						tstate_counter += z80ex_step(ms->z80);
+					} while (z80ex_last_op_type(ms->z80));
+
+					if (debug_testbp(bpPC,
+					  z80ex_get_reg(ms->z80, regPC))) {
+						break;
 					}
-					if (debug_testbp(bpPC, z80ex_get_reg(ms->z80, regPC))) break;
-					tstate_counter += z80ex_step(ms->z80);
 				}
 			}
 

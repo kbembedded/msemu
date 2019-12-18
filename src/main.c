@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include "debug.h"
 #include "flashops.h"
-#include "logger.h"
 #include "msemu.h"
 #include "sizes.h"
 #include "ui.h"
@@ -23,8 +22,6 @@ void usage(const char *path_arg, const char *cf_path, const char *df_path)
 	  "  -c <path>, --codeflash <path>  Path to codeflash ROM (def: %s)\n"
 	  "  -d <path>, --dataflash <path>  Path to dataflash ROM (def: %s)\n"
 	  "  -n                             Don't write changes back to disk\n"
-	  "  -l <path>, --logfile <path>    Output debug info to <path>\n"
-	  "  -v, --verbose                  Output debug info to terminal\n"
 	  "  -h, --help                     This usage information\n\n"
 
 	  "Debugger:\n"
@@ -36,10 +33,8 @@ void usage(const char *path_arg, const char *cf_path, const char *df_path)
 
 int main(int argc, char** argv)
 {
-	char* logpath = NULL;
 	int c;
 	int ret = 0;
-	int opt_verbose = 0;
 	int df_save_to_disk = 1;
 
 	ms_ctx ms;
@@ -48,8 +43,6 @@ int main(int argc, char** argv)
 	  { "help", no_argument, NULL, 'h' },
 	  { "codeflash", required_argument, NULL, 'c' },
 	  { "dataflash", required_argument, NULL, 'd' },
-	  { "logfile", optional_argument, NULL, 'l' },
-	  { "verbose", no_argument, NULL, 'v' },
 	/* TODO: Add argument to start with debug console open, e.g. execution
 	 * halted.
 	 */
@@ -63,7 +56,7 @@ int main(int argc, char** argv)
 
 	/* Process arguments */
 	while ((c = getopt_long(argc, argv,
-	  "hc:d:l:vn", long_opts, NULL)) != -1) {
+	  "hc:d:n", long_opts, NULL)) != -1) {
 		switch(c) {
 		  case 'c':
 			options.cf_path = malloc(strlen(optarg)+1);
@@ -78,23 +71,12 @@ int main(int argc, char** argv)
 		  case 'n':
 			df_save_to_disk = 0;
 			break;
-		  case 'l':
-			logpath = malloc(strlen(optarg) + 1);
-			/* TODO: Implement error handling here */
-			strncpy(logpath, optarg, strlen(optarg) + 1);
-		  	break;
-		  case 'v':
-			opt_verbose = 1;
-			break;
 		  case 'h':
 		  default:
 			usage(argv[0], options.cf_path, options.df_path);
 			return 1;
 		}
 	}
-
-	// Initialize logging
-	log_init(logpath, opt_verbose);
 
 	// Init mailstation w/ options
 	ms_init(&ms, &options);
@@ -121,8 +103,6 @@ int main(int argc, char** argv)
 			}
 		}
 	}
-
-	log_shutdown();
 
 	return ret;
 }

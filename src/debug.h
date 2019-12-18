@@ -14,5 +14,8 @@ int debug_prompt(void);
 void debug_dasm(void);
 int debug_testbp(enum bp_type type, Z80EX_WORD addr);
 int debug_isbreak(void);
+void log_error(char *mystring, ...);
+void log_trace(char *mystring, ...);
+void log_debug(char *mystring, ...);
 
 #endif

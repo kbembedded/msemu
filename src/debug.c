@@ -1,11 +1,11 @@
 #include <signal.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "debug.h"
-#include "logger.h"
 #include "msemu.h"
 
 #include <z80ex/z80ex_dasm.h>
@@ -14,6 +14,11 @@
 enum arguments {
 	no_arg = 0,
 	int_arg = 1,
+};
+
+enum levels {
+	LOG_TRACE = 0x01,
+	LOG_DBG   = 0x02,
 };
 
 struct cmdtable {
@@ -38,6 +43,8 @@ static debug_bp bp;
 static struct sigaction sigact;
 extern const char* const ms_dev_map_text[];
 
+static int dbg_level;
+
 static void leave_prompt(void *nan);
 static void help(void *nan);
 static void md(void *addr);
@@ -47,29 +54,69 @@ static void set_bpc(void *pc);
 static void set_bmw(void *addr);
 static void set_bmr(void *addr);
 static void examine(void *nan);
-static void force_on(void *nan);
-static void force_off(void *nan);
+static void trace_on(void *nan);
+static void trace_off(void *nan);
+static void dbg_on(void *nan);
+static void dbg_off(void *nan);
 
 static const struct cmdtable cmds[] = {
 	{ "q", 1, leave_prompt, "[Q]uit emulation and exit completely", no_arg },
 	{ "c", 1, leave_prompt, "[C]ontinue execution", no_arg },
 	{ "s", 1, leave_prompt, "[S]ingle step execution", no_arg },
-	{ "h", 1, help, "Display this [H]elp menu", no_arg },
-	{ "md", 2, md, "Display memory at address, \'md <addr>\'", int_arg },
-	{ "mw", 2, mw, "Edit memory at address, \'mw <addr> <val>\'", int_arg },
 	{ "l", 1, list_bp, "[L]ist the current breakpoints", no_arg },
-	{ "bpc", 3, set_bpc, "Breakpoint on PC, \'bpc <PC>\', -1 to disable",
-	  int_arg },
 	{ "bmw", 3, set_bmw, "Breakpoint on mem write, \'bmw <addr>\', "
 	  "-1 to disable", int_arg },
 	{ "bmr", 3, set_bmr, "Breakpoint on mem read, \'bmr <addr>\', "
 	  "-1 to disable", int_arg },
+	{ "bpc", 3, set_bpc, "Breakpoint on PC, \'bpc <PC>\', -1 to disable",
+	  int_arg },
+	{ "md", 2, md, "Display memory at address, \'md <addr>\'", int_arg },
+	{ "mw", 2, mw, "Edit memory at address, \'mw <addr> <val>\' "
+	  "(UNIMPLEMENTED)", int_arg },
 	{ "e", 1, examine, "[E]xamine current register state", no_arg },
-	{ "o", 1, force_on, "Force debug printing [O]n during exec", no_arg },
-	{ "f", 1, force_off, "Force debug printing o[F]f during exec", no_arg },
+	{ "dbgoff", 5, dbg_off, "Disable debug output during exec", no_arg },
+	{ "dbgon", 4, dbg_on, "Enable debug output during exec", no_arg },
+	{ "troff", 5, trace_off, "Disable trace output during exec", no_arg },
+	{ "tron", 4, trace_on, "Enable trace output during exec", no_arg },
+	{ "h", 1, help, "Display this [H]elp menu", no_arg },
 };
 #define NUMCMDS sizeof cmds / sizeof cmds[0]
 
+void log_debug(char *str, ...)
+{
+	va_list argp;
+
+	if (!(dbg_level & LOG_DBG)) {
+	        return;
+	}
+
+	va_start(argp, str);
+	vprintf(str, argp);
+	va_end(argp);
+}
+
+void log_trace(char *str, ...)
+{
+	va_list argp;
+
+	/* Only print if trace level is enabled and/or we're in a break */
+	if (!(dbg_level & LOG_TRACE) && !debug_isbreak()) {
+	        return;
+	}
+
+	va_start(argp, str);
+	vprintf(str, argp);
+	va_end(argp);
+}
+
+void log_error(char *str, ...)
+{
+	va_list argp;
+
+	va_start(argp, str);
+	vprintf(str, argp);
+	va_end(argp);
+}
 
 static void leave_prompt(void *nan)
 {
@@ -80,17 +127,27 @@ static void help(void *nan)
 {
 	int i = NUMCMDS;
 	printf("Available commands:\n");
-	while(i--) printf("%s - %s\n", cmds[i].cmd, cmds[i].doc);
+	while(i--) printf("%-8s - %s\n", cmds[i].cmd, cmds[i].doc);
 }
 
-static void force_on(void *nan)
+static void trace_on(void *nan)
 {
-	log_set(0);
+	dbg_level |= LOG_TRACE;
 }
 
-static void force_off(void *nan)
+static void trace_off(void *nan)
 {
-	log_set(1);
+	dbg_level &= ~LOG_TRACE;
+}
+
+static void dbg_on(void *nan)
+{
+	dbg_level |= LOG_DBG;
+}
+
+static void dbg_off(void *nan)
+{
+	dbg_level &= ~LOG_DBG;
 }
 
 static void md(void *addr)
@@ -219,7 +276,14 @@ int debug_prompt(void)
 
 Z80EX_BYTE debug_dasm_readbyte (Z80EX_WORD addr, void *user_data)
 {
-	return ms_mread(ms->z80, addr, 0, user_data);
+	int dbg_level_q = dbg_level;
+	Z80EX_BYTE val;
+
+	dbg_level &= ~LOG_DBG;
+	val = ms_mread(ms->z80, addr, 0, user_data);
+	dbg_level = dbg_level_q;
+
+	return val;
 }
 
 void debug_dasm(void)
@@ -229,6 +293,8 @@ void debug_dasm(void)
         int dasm_tstates = 0;
         int dasm_tstates2 = 0;
 
+	if (!debug_isbreak() && !(dbg_level & LOG_TRACE)) return;
+
 	bzero(&dasm_buffer, dasm_buffer_len);
 	z80ex_dasm(
 	  &dasm_buffer[0], dasm_buffer_len,
@@ -237,11 +303,12 @@ void debug_dasm(void)
 	  debug_dasm_readbyte,
 	  z80ex_get_reg(ms->z80, regPC),
 	  ms);
-	log_debug("%-15s  t=%d", dasm_buffer, dasm_tstates);
+	log_trace("%04x: %-15s  t=%d", z80ex_get_reg(ms->z80, regPC),
+	  dasm_buffer, dasm_tstates);
 	if(dasm_tstates2) {
-		log_debug("/%d", dasm_tstates2);
+		log_trace("/%d", dasm_tstates2);
 	}
-	log_debug("\n");
+	log_trace("\n");
 
 }
 
