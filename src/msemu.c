@@ -13,7 +13,7 @@
 #include "debug.h"
 #include "sizes.h"
 
-#include <SDL/SDL.h>
+#include <SDL2/SDL.h>
 #include <z80ex/z80ex.h>
 #include <z80ex/z80ex_dasm.h>
 
@@ -66,8 +66,8 @@ void powerOff(ms_ctx* ms)
 	ms->power_state = MS_POWERSTATE_OFF;
 
 	// clear LCD
-	memset(ms->lcd_dat8bit, 0, MS_LCD_WIDTH * MS_LCD_HEIGHT);
-	ui_drawSplashScreen();
+	memset(ms->lcd_datRGBA8888, 0, MS_LCD_WIDTH * MS_LCD_HEIGHT * sizeof(uint32_t));
+	ui_splashscreen_show();
 }
 
 //----------------------------------------------------------------------------
@@ -110,7 +110,8 @@ void writeLCD(ms_ctx* ms, uint16_t newaddr, uint8_t val, int lcdnum)
 		int n;
 		for (n = 0; n < 8; n++)
 		{
-			ms->lcd_dat8bit[n + (x * 8) + (newaddr * 320)] = ((val >> n) & 1 ? LCD_fg_color : LCD_bg_color);
+			int idx = n + (x * 8) + (newaddr * 320);
+			ms->lcd_datRGBA8888[idx] = ((val >> n) & 1 ? UI_LCD_PIXEL_ON : UI_LCD_PIXEL_OFF);
 		}
 
 		// Let main loop know to update screen with new LCD data
@@ -629,7 +630,7 @@ int process_interrupts (ms_ctx* ms)
 //
 void resetMailstation(ms_ctx* ms)
 {
-	memset(ms->lcd_dat8bit, 0, 320*240);
+	memset(ms->lcd_datRGBA8888, 0, 320*240 * sizeof(*ms->lcd_datRGBA8888));
 	memset(ms->io, 0, 64 * 1024);
 	// XXX: Mailstation normally retains RAM I believe.  But Mailstation OS
 	// won't warm-boot properly if we don't erase!  Not sure why yet.
@@ -659,8 +660,8 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	  sizeof(uint8_t));
 	/* XXX: MAGIC NUMBEERRRR */
 	/* ms->dev_map[LCD_R] = ms->dev_map[LCD_L] + 4800; */
-	ms->lcd_dat8bit = (uint8_t *)calloc(  MS_LCD_WIDTH * MS_LCD_HEIGHT,
-	  sizeof(uint8_t));
+	ms->lcd_datRGBA8888 = (uint32_t *)calloc(  MS_LCD_WIDTH * MS_LCD_HEIGHT,
+	  sizeof(uint32_t));
 
 	/* Initialize flags. */
 	ms->lcd_lastupdate = 0;
@@ -832,7 +833,7 @@ int ms_run(ms_ctx* ms)
 		 */
 		if (ms->power_state == MS_POWERSTATE_ON && (ms->lcd_lastupdate != 0) &&
 		  (currenttick - ms->lcd_lastupdate >= 20)) {
-			ui_drawLCD();
+			ui_update_lcd();
 			ms->lcd_lastupdate = 0;
 		}
 
@@ -858,7 +859,7 @@ int ms_run(ms_ctx* ms)
 					if (ms->power_state == MS_POWERSTATE_OFF)
 					{
 						printf("POWER ON\n");
-
+						ui_splashscreen_hide();
 						resetMailstation(ms);
 					}
 				} else {
@@ -890,6 +891,9 @@ int ms_run(ms_ctx* ms)
 				}
 			}
 		}
+
+		ui_render();
+
 		// Update SDL ticks
 		lasttick = currenttick;
 	}

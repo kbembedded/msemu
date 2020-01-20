@@ -3,17 +3,30 @@
 
 #include "msemu.h"
 #include "rawcga.h"
-#include <SDL/SDL.h>
-#include <SDL/SDL_rotozoom.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL2_rotozoom.h>
 
-// Primary SDL screen surface
-SDL_Surface* screen;
+// Main window
+SDL_Window* window;
+SDL_Renderer* renderer;
 
-// Master palette
-SDL_Color colors[6];
+// Splashscreen
+SDL_Surface* splashscreen_surface = NULL;
+SDL_Texture* splashscreen_tex = NULL;
+SDL_Rect splashscreen_srcRect = { 0, 0, 320, 240 };
+SDL_Rect splashscreen_dstRect = { 0, 0, 320, 240 };
+int splashscreen_show = 0;
 
-// Surface for the Mailstation LCD
-SDL_Surface *lcd_surface;
+// LCD
+SDL_Surface* lcd_surface = NULL;
+SDL_Texture* lcd_tex = NULL;
+SDL_Rect lcd_srcRect = { 0, 0, 320, 240 };
+SDL_Rect lcd_dstRect = { 0, 0, 320, 240 };
+
+SDL_Color fontcolors[2] = {
+	{ 0x00, 0x00, 0x00 }, /* Black */
+	{ 0xff, 0xff, 0x00 }, /* Yellow */
+};
 
 // Surface to load CGA font data, for printing text with SDL
 SDL_Surface *cgafont_surface = NULL;
@@ -43,7 +56,7 @@ void printcharXY(SDL_Surface* surface, char mychar, int x, int y)
 
 	//SDL_GetVideoSurface()
 	if (SDL_BlitSurface(cgafont_surface, &letterarea, surface, &charoutarea) != 0) {
-		printf("Error blitting text\n");
+		printf("Error blitting text: %s\n", SDL_GetError());
 	}
 }
 
@@ -109,137 +122,108 @@ void printstring(SDL_Surface* surface, char *mystring)
 }
 
 /* XXX: This needs rework still*/
-void ui_init(uint8_t* ms_lcd_buffer)
+void ui_init(uint32_t* ms_lcd_buffer)
 {
 	SDL_Surface *cgafont_tmp = NULL;
-	SDL_Color fontcolors[2];
+
+	SDL_Palette* fontPalette = NULL;
 
 	SDL_Init( SDL_INIT_VIDEO );
 
-	/* Set up colors to be used by the LCD display from the Mailstation */
-	/* TODO: Can this be done as a single 24bit quantity?
-	 */
-	memset(colors,0,sizeof(SDL_Color) * 6);
-	/* Black */
-	colors[0].r = 0x00; colors[0].g = 0x00; colors[0].b = 0x00;
-	/* Green */
-	colors[1].r = 0x00; colors[1].g = 0xff; colors[1].b = 0x00;
-	/* LCD Off-Green */
-	colors[2].r = 0x9d; colors[2].g = 0xe0; colors[2].b = 0x8c;
-	/* LCD Pixel Black */
-	colors[3].r = 0x26; colors[3].g = 0x21; colors[3].b = 0x14;
-	/* Blue */
-	colors[4].r = 0x00; colors[4].g = 0x00; colors[4].b = 0xff;
-	/* Yellow */
-	colors[5].r = 0xff; colors[5].g = 0xff; colors[5].b = 0x00;
+	window = SDL_CreateWindow(
+		"MailStation Emulator",
+		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+		320, 240, SDL_WINDOW_RESIZABLE);
 
+	renderer = SDL_CreateRenderer(window, -1, 0);
 
-	/* Set up SDL screen
-	 *
-	 * TODO:
-	 *   Worth implementing a resize feature?
-	 */
-	screen = SDL_SetVideoMode(MS_LCD_WIDTH * 2, MS_LCD_HEIGHT * 2, 8, SDL_HWPALETTE);
-	/*XXX: Check screen value */
-	if (SDL_SetPalette(screen, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 6) != 1) {
-		printf("Error setting palette\n");
+	// This allows us to assume the window size is 320x240,
+	// but SDL will scale/letterbox it to whatever size the window is.
+	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+	SDL_RenderSetLogicalSize(renderer, 320, 240);
+
+	/* Set up color palettes */
+	fontPalette = SDL_AllocPalette(2);
+	if (SDL_SetPaletteColors(fontPalette, fontcolors, 0, 2) != 0) {
+		printf("Failed to set font palette colors: %s\n", SDL_GetError());
 	}
 
-	// Set window caption
-	SDL_WM_SetCaption("Mailstation Emulator", NULL);
-
-
-
+	/* Prepare the font surface */
 	/* XXX: This color set up is really strange, fontcolors sets up yellow
 	 * on black font. However, it seems to be linked with the colors
 	 * array above. If one were to remove colors[5], that causes the
 	 * font color to cange. I hope that moving to a newer SDL version
 	 * will improve this.
 	 */
-	// Load embedded font for graphical print commands
 	cgafont_tmp = SDL_CreateRGBSurfaceFrom(raw_cga_array,
 	  8, 2048, 1, 1,  0,0,0,0);
 	if (cgafont_tmp == NULL) {
 		printf("Error creating font surface\n");
-		//return 1;
 	}
 
-	// Setup font palette
-	memset(fontcolors, 0, sizeof(fontcolors));
-	// Use yellow foreground, black background
-	fontcolors[1].r = fontcolors[1].g = 0xff;
-	// Write palette to surface
-	if (SDL_SetPalette(cgafont_tmp, SDL_LOGPAL|SDL_PHYSPAL, fontcolors,
-	  0, 2) != 1) {
+	if (SDL_SetPaletteColors(cgafont_tmp->format->palette, fontcolors, 0, 2) != 0) {
 		printf("Error setting palette on font\n");
 	}
 
 	// Convert the 1-bit font surface to match the display
-	cgafont_surface = SDL_DisplayFormat(cgafont_tmp);
+	cgafont_surface = SDL_ConvertSurfaceFormat(cgafont_tmp, SDL_GetWindowPixelFormat(window), 0);
 	// Free the 1-bit version
 	SDL_FreeSurface(cgafont_tmp);
 
+	/* Prepare the MailStation LCD surface */
+	lcd_surface = SDL_CreateRGBSurfaceFrom(ms_lcd_buffer, 320, 240, 32, 1280, 0,0,0,0);
+	if (!lcd_surface) {
+		printf("Error creating LCD surface: %s\n", SDL_GetError());
+	}
+	lcd_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 320, 240);
 
-	// Create 8-bit LCD surface for drawing to emulator screen
-	lcd_surface = SDL_CreateRGBSurfaceFrom(ms_lcd_buffer, 320, 240, 8, 320, 0,0,0,0);
-	if (lcd_surface == NULL) {
-		printf("Error creating LCD surface\n");
-		//return 1;
+	/* Set up splash screen */
+	splashscreen_surface = SDL_CreateRGBSurface(0, 320, 240, 8, 0, 0, 0, 0);
+	if (!splashscreen_surface) {
+		printf("Error creating splashscreen surface: %s\n", SDL_GetError());
 	}
 
-	// Set palette for LCD to global palette
-	if (SDL_SetPalette(lcd_surface, SDL_LOGPAL|SDL_PHYSPAL, colors, 0, 6) != 1) {
-		printf("Error setting palette on LCD\n");
+	// SDL_FillRect(splashscreen_surface, &splashscreen_srcRect, SDL_MapRGB(splashscreen_surface->format, 0xFF, 0x00, 0x00));
+	printstring_centered(splashscreen_surface, "Mailstation Emulator", 4 * 8);
+	printstring_centered(splashscreen_surface, "v0.2", 5 * 8);
+	printstring_centered(splashscreen_surface, "F12 to Start", 15 * 8);
+
+	splashscreen_tex = SDL_CreateTextureFromSurface(renderer, splashscreen_surface);
+}
+
+void ui_splashscreen_show()
+{
+	splashscreen_show = 1;
+}
+
+void ui_splashscreen_hide()
+{
+	splashscreen_show = 0;
+}
+
+void ui_update_lcd()
+{
+	if (SDL_UpdateTexture(lcd_tex, &lcd_srcRect, lcd_surface->pixels, lcd_surface->pitch) != 0)  {
+		printf("Failed to update LCD: %s\n", SDL_GetError());
 	}
 }
 
-// TODO: This is no longer zoomed 2x like the LCD because the printstring
-// functions are using the correct SDL surface.
-// Need to find a better way to handle screen scaling as a final step before
-// rendering the final surface instead of scaling each surface separately.
-void ui_drawSplashScreen()
+void ui_render()
 {
-	SDL_Rect bg;
-	bg.x = 0;
-	bg.y = 0;
-	bg.w = screen->w;
-	bg.h = screen->h;
+	SDL_RenderClear(renderer);
 
-	if (SDL_FillRect(screen, &bg, 0x00000000)) {
-		printf("Error drawing splashscreen background.\n");
+	// Render LCD
+	SDL_RenderCopy(
+		renderer, lcd_tex,
+		&lcd_srcRect, &lcd_dstRect);
+
+	// We're rendering back to front, so we always check
+	// this last so the splash screen always appears on top.
+	if (splashscreen_show) {
+		SDL_RenderCopy(
+			renderer, splashscreen_tex,
+			&splashscreen_srcRect, &splashscreen_dstRect);
 	}
 
-	printstring_centered(screen, "Mailstation Emulator", 4 * 8);
-	printstring_centered(screen, "v0.2", 5 * 8);
-	printstring_centered(screen, "F12 to Start", 15 * 8);
-
-	SDL_Flip(screen);
-}
-
-void ui_drawLCD()
-{
-	SDL_Surface *lcd_surface2x = NULL;
-
-	// Setup output rect to fill screen for now
-	SDL_Rect outrect;
-	outrect.x = 0;
-	outrect.y = 0;
-	outrect.w = MS_LCD_WIDTH;
-	outrect.h = MS_LCD_HEIGHT;
-
-	// Double surface size to 640x480
-	lcd_surface2x = zoomSurface(lcd_surface, (double)2.0, (double)2.0, 0);
-	// If we don't clear the color key, it constantly overlays just the primary color during blit!
-	SDL_SetColorKey(lcd_surface2x, 0, 0);
-
-	// Draw to screen
-	if (SDL_BlitSurface(lcd_surface2x, NULL, screen, &outrect) != 0) {
-		printf("Error blitting LCD to screen: %s\n",SDL_GetError());
-	}
-
-	//SDL_UpdateRect(SDL_GetVideoSurface(), 0,0, SCREENWIDTH, SCREENHEIGHT);
-	SDL_Flip(screen);
-
-	// Dump 2x surface
-	SDL_FreeSurface(lcd_surface2x);
+	SDL_RenderPresent(renderer);
 }
