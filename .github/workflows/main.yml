@@ -1,0 +1,15 @@
+name: Build
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl1.2-dev libsdl-gfx1.2-dev libz80ex-dev
+      - name: Make
+        run: make
