@@ -188,7 +188,6 @@ static void set_bmr(void *addr)
 
 static void examine(void *nan)
 {
-	/* TODO: In addition to regs, also list current slot mapping */
 	printf("AF:  0x%04X\tBC:  0x%04X\tDE:  0x%04X\tHL:  0x%04X\n"
 	       "AF': 0x%04X\tBC': 0x%04X\tDE': 0x%04X\tHL': 0x%04X\n"
 	       "IX:  0x%04X\tIY:  0x%04X\tPC:  0x%04X\tSP:  0x%04X\n"
