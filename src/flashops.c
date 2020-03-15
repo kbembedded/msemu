@@ -1,6 +1,6 @@
+#include "debug.h"
 #include "flashops.h"
 #include "msemu.h"
-#include "logger.h"
 #include "sizes.h"
 
 #include <ctype.h>

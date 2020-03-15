@@ -7,7 +7,6 @@
  */
 
 #include <time.h>
-#include "logger.h"
 #include "msemu.h"
 #include "flashops.h"
 #include "ui.h"
@@ -34,6 +33,16 @@ int32_t keyTranslateTable[10][8] = {
 	{ SDLK_k, SDLK_l, SDLK_COMMA, SDLK_PERIOD, SDLK_SLASH, SDLK_UP, SDLK_DOWN, SDLK_RIGHT },
 	{ SDLK_LSHIFT, SDLK_z, SDLK_x, SDLK_c, SDLK_v, SDLK_b, SDLK_n, SDLK_m },
 	{ SDLK_LCTRL, 0, 0, SDLK_SPACE, 0, 0, SDLK_RSHIFT, SDLK_LEFT }
+};
+
+const char* const ms_dev_map_text[] = {
+	"CF",
+	"RAM",
+	"LCD_L",
+	"DF",
+	"LCD_R",
+	"MODEM",
+	NULL
 };
 
 //----------------------------------------------------------------------------
@@ -168,6 +177,8 @@ Z80EX_BYTE z80ex_mread(
 	int slot = ((addr & 0xC000) >> 14);
 	int dev = 0xFF;
 
+	debug_testbp(bpMR, addr);
+
 	/* slot4 and slot8 are dynamic, if the requested address falls
 	 * in this range, then we need to set up the device we're going
 	 * to talk to. The other two slots are hard-coded and the dev/page
@@ -247,6 +258,8 @@ void z80ex_mwrite(
 	ms_ctx* ms = (ms_ctx*)user_data;
 	int slot = ((addr & 0xC000) >> 14);
 	int dev = 0xFF, page = 0xFF;
+
+	debug_testbp(bpMW, addr);
 
 	/* slot4 and slot8 are dynamic, if the requested address falls
 	 * in this range, then we need to set up the device we're going
@@ -656,7 +669,6 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	ms->interrupt_mask = 0;
 	ms->power_button = 0;
 	ms->power_state = MS_POWERSTATE_OFF;
-	ms->bp = -1;
 
 	/* Initialize the slot_map */
 	ms->slot_map[0] = ms->dev_map[CF]; /* slot0000 is always CF_0 */
@@ -716,6 +728,9 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 		}
 	}
 
+	/* Set up debug hooks */
+	debug_init(ms, z80ex_mread);
+
 	/* TODO: Add git tags to this, because thats neat */
 	printf("\nMailstation Emulator v0.2\n");
 	printf("\nPress ctrl+c to enter interactive Mailstation debugger\n");
@@ -750,15 +765,10 @@ int ms_run(ms_ctx* ms)
 
 	while (!exitemu)
 	{
-		if (ms->debugger_state & MS_DBG_ON) {
-			switch (debug_prompt(ms)) {
+		if (debug_isbreak()) {
+			switch (debug_prompt()) {
 			  case -1: /* Quit */
 				exitemu = 1;
-			  case 0: /* Continue */
-				ms->debugger_state &= ~(MS_DBG_ON | MS_DBG_SINGLE_STEP);
-				break;
-			  case 1: /* Single step */
-				ms->debugger_state |= MS_DBG_ON | MS_DBG_SINGLE_STEP;
 				break;
 			}
 		}
@@ -786,39 +796,25 @@ int ms_run(ms_ctx* ms)
 		 * the actual instruction. After this, an INT is attempted.
 		 *
 		 * Execution loop will only stop prematurely if a breakpoint on
-		 * the PC is hit. Interrupting with ctrl+c in terminal or esc
-		 * on the SDL window will only occur after this loop has
+		 * the PC is hit. Interrupting with ctrl+c in terminal will
+		 * cause this loop to exit after the next instruction. Pressing
+		 * esc on the SDL window will only process after this loop has
 		 * completed.*/
 		if (ms->power_state == MS_POWERSTATE_ON) {
 			execute_counter += currenttick - lasttick;
-			if (ms->debugger_state & MS_DBG_SINGLE_STEP) {
-				/* Force verbose output for single step */
-				log_push(1);
-				do {
-					/* debug_dasm() only works at the start
-					 * of a full opcode, therefore need to
-					 * check that the last step was not a
-					 * prefix but a full instruction */
-					if (!z80ex_last_op_type(ms->z80)) {
-						debug_dasm(ms);
-					}
-					tstate_counter += z80ex_step(ms->z80);
-				} while (z80ex_last_op_type(ms->z80));
-				/* Restore prior verbosity level */
-				log_pop();
+			if (execute_counter > 15 || debug_isbreak()) {
+				if (execute_counter > 15) execute_counter = 0;
 
-			} else if (execute_counter > 15) {
-				execute_counter = 0;
-				while (tstate_counter < interrupt_period ||
-				  z80ex_last_op_type(ms->z80)) {
-					if (log_isverbose() && !z80ex_last_op_type(ms->z80)){
-						debug_dasm(ms);
-					}
-					if (z80ex_get_reg(ms->z80, regPC) == ms->bp) {
-						ms->debugger_state |= MS_DBG_ON;
+				while (tstate_counter < interrupt_period) {
+					debug_dasm();
+					do {
+						tstate_counter += z80ex_step(ms->z80);
+					} while (z80ex_last_op_type(ms->z80));
+
+					if (debug_testbp(bpPC,
+					  z80ex_get_reg(ms->z80, regPC))) {
 						break;
 					}
-					tstate_counter += z80ex_step(ms->z80);
 				}
 			}
 
