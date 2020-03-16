@@ -51,7 +51,7 @@ void ui_init(uint32_t* ms_lcd_buffer)
 
 	// This allows us to assume the window size is 320x240,
 	// but SDL will scale/letterbox it to whatever size the window is.
-	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 	SDL_RenderSetLogicalSize(renderer, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
 	/* Load font */
