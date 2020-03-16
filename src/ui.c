@@ -4,11 +4,13 @@
 #include "msemu.h"
 #include "rawcga.h"
 #include <SDL2/SDL.h>
-#include <SDL2/SDL2_rotozoom.h>
+#include <SDL2/SDL_ttf.h>
 
 // Main window
-SDL_Window* window;
-SDL_Renderer* renderer;
+SDL_Window* window = NULL;
+SDL_Renderer* renderer = NULL;
+TTF_Font* font = NULL;
+SDL_Color font_color = { 0xff, 0xff, 0x00 }; /* Yellow */
 
 // Splashscreen
 SDL_Surface* splashscreen_surface = NULL;
@@ -23,10 +25,6 @@ SDL_Texture* lcd_tex = NULL;
 SDL_Rect lcd_srcRect = { 0, 0, 320, 240 };
 SDL_Rect lcd_dstRect = { 0, 0, 320, 240 };
 
-SDL_Color fontcolors[2] = {
-	{ 0x00, 0x00, 0x00 }, /* Black */
-	{ 0xff, 0xff, 0x00 }, /* Yellow */
-};
 
 // Surface to load CGA font data, for printing text with SDL
 SDL_Surface *cgafont_surface = NULL;
@@ -124,11 +122,13 @@ void printstring(SDL_Surface* surface, char *mystring)
 /* XXX: This needs rework still*/
 void ui_init(uint32_t* ms_lcd_buffer)
 {
-	SDL_Surface *cgafont_tmp = NULL;
+	if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
+		printf("Failed to initialize SDL: %s\n", SDL_GetError());
+	}
 
-	SDL_Palette* fontPalette = NULL;
-
-	SDL_Init( SDL_INIT_VIDEO );
+	if (TTF_Init() != 0) {
+		printf("Failed to initialize SDL_TTF: %s\n", TTF_GetError());
+	}
 
 	window = SDL_CreateWindow(
 		"MailStation Emulator",
@@ -136,39 +136,18 @@ void ui_init(uint32_t* ms_lcd_buffer)
 		320, 240, SDL_WINDOW_RESIZABLE);
 
 	renderer = SDL_CreateRenderer(window, -1, 0);
+	SDL_SetRenderDrawColor(renderer, 0xff, 0xff, 0xff, 0xff);
 
 	// This allows us to assume the window size is 320x240,
 	// but SDL will scale/letterbox it to whatever size the window is.
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 	SDL_RenderSetLogicalSize(renderer, 320, 240);
 
-	/* Set up color palettes */
-	fontPalette = SDL_AllocPalette(2);
-	if (SDL_SetPaletteColors(fontPalette, fontcolors, 0, 2) != 0) {
-		printf("Failed to set font palette colors: %s\n", SDL_GetError());
+	/* Load font */
+	font = TTF_OpenFont("fonts/kongtext.ttf", 8);
+	if (!font) {
+		printf("Failed to load font: %s\n", TTF_GetError());
 	}
-
-	/* Prepare the font surface */
-	/* XXX: This color set up is really strange, fontcolors sets up yellow
-	 * on black font. However, it seems to be linked with the colors
-	 * array above. If one were to remove colors[5], that causes the
-	 * font color to cange. I hope that moving to a newer SDL version
-	 * will improve this.
-	 */
-	cgafont_tmp = SDL_CreateRGBSurfaceFrom(raw_cga_array,
-	  8, 2048, 1, 1,  0,0,0,0);
-	if (cgafont_tmp == NULL) {
-		printf("Error creating font surface\n");
-	}
-
-	if (SDL_SetPaletteColors(cgafont_tmp->format->palette, fontcolors, 0, 2) != 0) {
-		printf("Error setting palette on font\n");
-	}
-
-	// Convert the 1-bit font surface to match the display
-	cgafont_surface = SDL_ConvertSurfaceFormat(cgafont_tmp, SDL_GetWindowPixelFormat(window), 0);
-	// Free the 1-bit version
-	SDL_FreeSurface(cgafont_tmp);
 
 	/* Prepare the MailStation LCD surface */
 	lcd_surface = SDL_CreateRGBSurfaceFrom(ms_lcd_buffer, 320, 240, 32, 1280, 0,0,0,0);
@@ -178,26 +157,21 @@ void ui_init(uint32_t* ms_lcd_buffer)
 	lcd_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 320, 240);
 
 	/* Set up splash screen */
-	splashscreen_surface = SDL_CreateRGBSurface(0, 320, 240, 8, 0, 0, 0, 0);
-	if (!splashscreen_surface) {
-		printf("Error creating splashscreen surface: %s\n", SDL_GetError());
-	}
+	// printstring_centered(splashscreen_surface, "Mailstation Emulator", 4 * 8);
+	// printstring_centered(splashscreen_surface, "v0.2", 5 * 8);
+	// printstring_centered(splashscreen_surface, "F12 to Start", 15 * 8);
 
-	// SDL_FillRect(splashscreen_surface, &splashscreen_srcRect, SDL_MapRGB(splashscreen_surface->format, 0xFF, 0x00, 0x00));
-	printstring_centered(splashscreen_surface, "Mailstation Emulator", 4 * 8);
-	printstring_centered(splashscreen_surface, "v0.2", 5 * 8);
-	printstring_centered(splashscreen_surface, "F12 to Start", 15 * 8);
-
-	splashscreen_tex = SDL_CreateTextureFromSurface(renderer, splashscreen_surface);
 }
 
 void ui_splashscreen_show()
 {
+	printf("Splashscreen ON\n");
 	splashscreen_show = 1;
 }
 
 void ui_splashscreen_hide()
 {
+	printf("Splashscreen OFF\n");
 	splashscreen_show = 0;
 }
 
