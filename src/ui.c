@@ -8,6 +8,8 @@
 // Main window
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
+#define LOGICAL_WIDTH  640
+#define LOGICAL_HEIGHT 480
 
 // Splashscreen
 SDL_Surface* splashscreen_surface = NULL;
@@ -22,7 +24,7 @@ int splashscreen_show = 0;
 SDL_Surface* lcd_surface = NULL;
 SDL_Texture* lcd_tex = NULL;
 SDL_Rect lcd_srcRect = { 0, 0, 320, 240 };
-SDL_Rect lcd_dstRect = { 0, 0, 320, 240 };
+SDL_Rect lcd_dstRect = { 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT };
 
 /* XXX: This needs rework still*/
 void ui_init(uint32_t* ms_lcd_buffer)
@@ -42,7 +44,7 @@ void ui_init(uint32_t* ms_lcd_buffer)
 	window = SDL_CreateWindow(
 		"MailStation Emulator",
 		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-		320, 240, SDL_WINDOW_RESIZABLE);
+		LOGICAL_WIDTH, LOGICAL_HEIGHT, SDL_WINDOW_RESIZABLE);
 
 	renderer = SDL_CreateRenderer(window, -1, 0);
 	SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xff);
@@ -50,10 +52,10 @@ void ui_init(uint32_t* ms_lcd_buffer)
 	// This allows us to assume the window size is 320x240,
 	// but SDL will scale/letterbox it to whatever size the window is.
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
-	SDL_RenderSetLogicalSize(renderer, 320, 240);
+	SDL_RenderSetLogicalSize(renderer, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
 	/* Load font */
-	font = TTF_OpenFont("fonts/kongtext.ttf", 12);
+	font = TTF_OpenFont("fonts/kongtext.ttf", 24);
 	if (!font) {
 		printf("Failed to load font: %s\n", TTF_GetError());
 		abort();
@@ -61,7 +63,7 @@ void ui_init(uint32_t* ms_lcd_buffer)
 
 	/* Prepare the splashscreen surface */
 	splashscreen_surface = TTF_RenderText_Blended_Wrapped(
-		font, "Mailstation Emulator v0.2\n\nF12 to Start", font_color, 320);
+		font, "Mailstation Emulator v0.2\n\nF12 to Start", font_color, LOGICAL_WIDTH);
 	if (!splashscreen_surface) {
 		printf("Error creating splashscreen surface: %s\n", TTF_GetError());
 		abort();
