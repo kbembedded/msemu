@@ -61,6 +61,7 @@ static void trace_on(void *nan);
 static void trace_off(void *nan);
 static void dbg_on(void *nan);
 static void dbg_off(void *nan);
+static void dump_stack(void *nan);
 
 static const struct cmdtable cmds[] = {
 	{ "q", 1, leave_prompt, "[Q]uit emulation and exit completely", no_arg },
@@ -81,6 +82,7 @@ static const struct cmdtable cmds[] = {
 	{ "dbgon", 4, dbg_on, "Enable debug output during exec", no_arg },
 	{ "troff", 5, trace_off, "Disable trace output during exec", no_arg },
 	{ "tron", 4, trace_on, "Enable trace output during exec", no_arg },
+	{ "dumpstack", 9, dump_stack, "Dump stack from SP to 0xFFFF", no_arg },
 	{ "h", 1, help, "Display this [H]elp menu", no_arg },
 };
 #define NUMCMDS sizeof cmds / sizeof cmds[0]
@@ -187,6 +189,22 @@ static void set_bmr(void *addr)
 {
 	int32_t new_bp = *(unsigned long *)addr;
 	bp.mr = new_bp;
+}
+
+static void dump_stack(void *nan)
+{
+	uint16_t sp = z80ex_get_reg(ms->z80,regSP);
+
+	/* This covers both even and odd SP start locations. The MS firmware
+	 * uses 0xFFFF as the reset SP, while custom code could be using 0x0000
+	 * 0x0000 as top of stack is safe since the SP technically points to
+	 * most recent byte on the stack; any stack operations first dec SP. */
+	for (; sp != 0x0000; ) {
+		// prints 0x00SP 0x(SP)(SP+1)
+		printf("0x%04X: 0x%02X\n", sp, ms_mread(ms->z80, sp, 0, ms));
+		sp++;
+	};
+
 }
 
 static void examine(void *nan)
