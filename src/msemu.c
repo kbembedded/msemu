@@ -579,6 +579,19 @@ int process_interrupts (ms_ctx* ms)
 {
 	static int icount = 0;
 
+	/* XXX: This is a hack and the whole interrupt system needs to be
+	 * refactored at some point in the future.
+	 * The next line is needed because of a potential condition where an
+	 * interrupt would be called, but the Z80 has interrupts currently
+	 * disabled. This results in interrupt_mask getting set, but z80ex_int
+	 * call gets rejected because interrupts are disabled. With the mask
+	 * set, all future time interrupts here just get ignored because of
+	 * the if statements below checking the port and the interrupt_mask.
+	 * A proper interrupt implementation needs to occur at some point,
+	 * however, the CPU in the MS probably needs to be a bit better
+	 * understood first.*/
+	if (!z80ex_int_possible(ms->z80)) return 0;
+
 	// Interrupt occurs at 64hz.  So this counter reduces to 1 sec intervals
 	if (icount++ >= 64)
 	{
