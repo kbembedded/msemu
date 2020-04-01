@@ -35,13 +35,13 @@ int df_parse_cmd (ms_ctx* ms, unsigned int translated_addr, uint8_t val)
 	if (!cycle) {
 		switch (val) {
 		  case 0xFF: /* Reset dataflash, single cycle */
-			log_debug(" * DF    Reset\n");
+			log_debug(" * DF    Reset @ 0x%04X\n", z80ex_get_reg(ms->z80, regPC));
 			break;
 		  case 0x00: /* Not sure what cmd is, but only one cycle? */
-			log_debug(" * DF    CMD 0x00\n");
+			log_debug(" * DF    CMD 0x00 @ 0x%04X\n", z80ex_get_reg(ms->z80, regPC));
 			break;
 		  case 0xC3: /* Not sure what cmd is, but only one cycle? */
-			log_debug(" * DF    CMD 0xC3\n");
+			log_debug(" * DF    CMD 0xC3 @ 0x%04X\n", z80ex_get_reg(ms->z80, regPC));
 			break;
 		  default:
 			cmd = val;
@@ -53,23 +53,23 @@ int df_parse_cmd (ms_ctx* ms, unsigned int translated_addr, uint8_t val)
 		  case 0x20: /* Sector erase, execute cmd is 0xD0 */
 			if (val != 0xD0) break;
 			translated_addr &= 0xFFFFFF00;
-			log_debug(" * DF    Sector-Erase: 0x%X\n", translated_addr);
+			log_debug(" * DF    Sector-Erase: 0x%X @ 0x%04X\n", translated_addr, z80ex_get_reg(ms->z80, regPC));
 			memset((uint8_t *)(ms->dev_map[DF] + translated_addr), 0xFF, 0x100);
 			modified = 1;
 			break;
 		  case 0x10: /* Byte program */
-			log_debug(" * DF    W [%04X] <- %02X\n", translated_addr,val);
+			log_debug(" * DF    W [%04X] <- %02X @ 0x%04X\n", translated_addr,val, z80ex_get_reg(ms->z80, regPC));
 			*(uint8_t *)(ms->dev_map[DF] + translated_addr) = val;
 			modified = 1;
 			break;
 		  case 0x30: /* Chip erase, execute cmd is 0x30 */
 			if (val != 0x30) break;
-			log_debug(" * DF    Chip erase\n");
+			log_debug(" * DF    Chip erase @ 0x%04X\n", z80ex_get_reg(ms->z80, regPC));
 			memset((uint8_t *)ms->dev_map[DF], 0xFF, SZ_512K);
 			modified = 1;
 			break;
 		  case 0x90: /* Read ID */
-			log_debug(" * DF    Read ID\n");
+			log_debug(" * DF    Read ID @ 0x%04X\n", z80ex_get_reg(ms->z80, regPC));
 			break;
 		  default:
 			log_error(
