@@ -205,13 +205,13 @@ int df_write(uint8_t *df_buf, unsigned int absolute_addr, uint8_t val)
 	if (!cycle) {
 		switch (val) {
 		  case 0xFF: /* Reset dataflash, single cycle */
-			log_debug(" * DF    Reset\n");
+			log_debug(" * DF    Reset @ 0x%04X\n", z80ex_get_reg(ms->z80, regPC));
 			break;
 		  case 0x00: /* Not sure what cmd is, but only one cycle? */
-			log_debug(" * DF    CMD 0x00\n");
+			log_debug(" * DF    CMD 0x00 @ 0x%04X\n", z80ex_get_reg(ms->z80, regPC));
 			break;
 		  case 0xC3: /* Not sure what cmd is, but only one cycle? */
-			log_debug(" * DF    CMD 0xC3\n");
+			log_debug(" * DF    CMD 0xC3 @ 0x%04X\n", z80ex_get_reg(ms->z80, regPC));
 			break;
 		  default:
 			cmd = val;
@@ -227,7 +227,7 @@ int df_write(uint8_t *df_buf, unsigned int absolute_addr, uint8_t val)
 				break;
 			}
 			absolute_addr &= 0xFFFFFF00;
-			log_debug(" * DF    Sector-Erase: 0x%X\n", absolute_addr);
+			log_debug(" * DF    Sector-Erase: 0x%X @ 0x%04X\n", translated_addr, z80ex_get_reg(ms->z80, regPC));
 			memset((df_buf + absolute_addr), 0xFF, 0x100);
 			break;
 		  case 0x10: /* Byte program */
@@ -235,7 +235,7 @@ int df_write(uint8_t *df_buf, unsigned int absolute_addr, uint8_t val)
 				log_error(" * DF    Attempted byte program while DF locked!\n");
 				break;
 			}
-			log_debug(" * DF    W [%04X] <- %02X\n", absolute_addr,val);
+			log_debug(" * DF    W [%04X] <- %02X @ 0x%04X\n", translated_addr,val, z80ex_get_reg(ms->z80, regPC));
 			*(df_buf + absolute_addr) = val;
 			break;
 		  case 0x30: /* Chip erase, execute cmd is 0x30 */
@@ -244,14 +244,14 @@ int df_write(uint8_t *df_buf, unsigned int absolute_addr, uint8_t val)
 				log_error(" * DF    Attempted chip erase while DF locked!\n");
 				break;
 			}
-			log_debug(" * DF    Chip erase\n");
+			log_debug(" * DF    Chip erase @ 0x%04X\n", z80ex_get_reg(ms->z80, regPC));
 			memset(df_buf, 0xFF, SZ_512K);
 			break;
 		  case 0x90: /* Read ID */
 			/* XXX: Currently does not do any operation with this
 			 * command. Does not seem to affect MS operation though
 			 */
-			log_debug(" * DF    Read ID\n");
+			log_debug(" * DF    Read ID @ 0x%04X\n", z80ex_get_reg(ms->z80, regPC));
 			break;
 		  default:
 			log_error(
