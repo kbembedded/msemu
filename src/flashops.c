@@ -8,6 +8,30 @@
 #include <stdlib.h>
 #include <string.h>
 
+static int df_write_protected = 1;
+
+const uint16_t df_unlock_lock_arr[] = {
+	0x1823,
+	0x1820,
+	0x1822,
+	0x0418,
+	0x041B,
+	0x0419,
+	0x041A,
+
+	0x0000,
+
+	0x1823,
+	0x1820,
+	0x1822,
+	0x0418,
+	0x041B,
+	0x0419,
+	0x040A,
+
+	0x0000
+};
+
 /* Interpret commands intended for 28SF040 flash
  *
  * The Z80 will output commands and an addres. In order to properly handle a
@@ -52,18 +76,30 @@ int df_parse_cmd (ms_ctx* ms, unsigned int translated_addr, uint8_t val)
 		switch(cmd) {
 		  case 0x20: /* Sector erase, execute cmd is 0xD0 */
 			if (val != 0xD0) break;
+			if (df_write_protected) {
+				log_error(" * DF    Attempted sector erase while DF locked!\n");
+				break;
+			}
 			translated_addr &= 0xFFFFFF00;
 			log_debug(" * DF    Sector-Erase: 0x%X @ 0x%04X\n", translated_addr, z80ex_get_reg(ms->z80, regPC));
 			memset((uint8_t *)(ms->dev_map[DF] + translated_addr), 0xFF, 0x100);
 			modified = 1;
 			break;
 		  case 0x10: /* Byte program */
+			if (df_write_protected) {
+				log_error(" * DF    Attempted byte program while DF locked!\n");
+				break;
+			}
 			log_debug(" * DF    W [%04X] <- %02X @ 0x%04X\n", translated_addr,val, z80ex_get_reg(ms->z80, regPC));
 			*(uint8_t *)(ms->dev_map[DF] + translated_addr) = val;
 			modified = 1;
 			break;
 		  case 0x30: /* Chip erase, execute cmd is 0x30 */
 			if (val != 0x30) break;
+			if (df_write_protected) {
+				log_error(" * DF    Attempted chip erase while DF locked!\n");
+				break;
+			}
 			log_debug(" * DF    Chip erase @ 0x%04X\n", z80ex_get_reg(ms->z80, regPC));
 			memset((uint8_t *)ms->dev_map[DF], 0xFF, SZ_512K);
 			modified = 1;
@@ -80,6 +116,16 @@ int df_parse_cmd (ms_ctx* ms, unsigned int translated_addr, uint8_t val)
 	}
 
 	return modified;
+}
+
+void df_unlock(void)
+{
+	df_write_protected = 0;
+}
+
+void df_lock(void)
+{
+	df_write_protected = 1;
 }
 
 /* Generate and set a random serial number to dataflash buffer that is valid

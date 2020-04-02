@@ -21,6 +21,9 @@
 uint8_t LCD_fg_color = 3;  // LCD black
 uint8_t LCD_bg_color = 2;  // LCD green
 
+/* Track the state of the dataflash lock/unlock sequence */
+unsigned int lock_seq_num;
+
 // This table translates PC scancodes to the Mailstation key matrix
 int32_t keyTranslateTable[10][8] = {
 	{ SDLK_HOME, SDLK_END, 0, SDLK_F1, SDLK_F2, SDLK_F3, SDLK_F4, SDLK_F5 },
@@ -224,8 +227,22 @@ Z80EX_BYTE z80ex_mread(
 		log_debug(" * MODEM R is not supported\n");
 		break;
 
-	  case CF:
 	  case DF:
+		/* Check for special lock/unlock read sequence */
+		if ((addr & 0x1FFF) == df_unlock_lock_arr[lock_seq_num]) {
+			lock_seq_num++;
+			if (lock_seq_num == 0x7) {
+				lock_seq_num++;
+				df_unlock();
+			}
+			if (lock_seq_num == 0xF) {
+				lock_seq_num = 0;
+				df_lock();
+			}
+		} else {
+			lock_seq_num &= ~(0x7);
+		}
+	  case CF:
 	  case RAM:
 		ret = *(uint8_t *)(ms->slot_map[slot] + (addr & 0x3FFF));
 		log_debug(" * MEM   R [%04X] -> %02X\n", addr, ret);
@@ -305,6 +322,8 @@ void z80ex_mwrite(
 	  case DF:
 		ms->dataflash_updated = df_parse_cmd(ms,
 		  ((addr - (slot << 14)) + (0x4000 * page)), val);
+		/* Any writes to dataflash will break the sequence */
+		lock_seq_num &= ~(0x7);
 		break;
 
 	  case MODEM:

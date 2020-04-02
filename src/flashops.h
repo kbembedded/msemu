@@ -7,6 +7,17 @@
 
 #define DF_SN_OFFS	0x7FFC8
 
+/* Struct to handle software data protection of the 28SF040
+ * The dataflash starts out locked, so in order to get back to the locked
+ * state, the whole array must be traversed. In msemu, a counter can be
+ * used to watch the reads, once the unlock set is matched, then the device
+ * will remain unlocked until successfully matching the lock set.
+ */
+extern const uint16_t df_unlock_lock_arr[];
+
+void df_unlock(void);
+void df_lock(void);
+
 /**
  * Interpret commands intended for 28SF040 flash, aka Mailstation dataflash
  *
