@@ -76,9 +76,15 @@ Things NOT emulated:
 ### Building
 This project currently requires libz80ex, SDL 1.2 and SDL-gfx 1.2.
 
-Simply run
+To build, cmake 3.7+ is required.
 
-`make`
+Create a build directory, run cmake, and build:
+```
+mkdir build
+cd build
+cmake ..
+cmake --build . --config Debug
+```
 
 The application can be started with:
 
