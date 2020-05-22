@@ -79,7 +79,7 @@ int main(int argc, char** argv)
 	}
 
 	// Init mailstation w/ options
-	ms_init(&ms, &options);
+	if (ms_init(&ms, &options) == MS_ERR) return 1;
 	ui_init(ms.lcd_dat8bit);
 
 	// Run mailstation
