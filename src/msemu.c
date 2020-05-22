@@ -375,14 +375,14 @@ Z80EX_BYTE z80ex_pread (
 
 	Z80EX_BYTE ret = 0;
 
-	/* TODO: Refactor this so we're not getting the time on EVERY single
-	 * PORT read.
-	 */
-	time( &theTime );
-	rtc_time = localtime(&theTime);
-
 	/* z80ex sets the upper bits of the port address, we don't want that */
 	port &= 0xFF;
+
+	/* Get the time only if we're accessing timer registers */
+	if (port >= RTC_SEC && port <= RTC_10YR) {
+		time( &theTime );
+		rtc_time = localtime(&theTime);
+	}
 
 	log_debug(" * IO    R [  %02X] -> %02X\n", port, ms->io[port]);
 
@@ -637,7 +637,7 @@ int process_interrupts (ms_ctx* ms)
 		icount = 0;
 
 		// do time16 interrupt
-		if (ms->io[3] & 0x10 && !(ms->interrupt_mask & 0x10))
+		if (ms->io[IRQ_MASK] & 0x10 && !(ms->interrupt_mask & 0x10))
 		{
 			ms->interrupt_mask |= 0x10;
 			return z80ex_int(ms->z80);
@@ -645,9 +645,9 @@ int process_interrupts (ms_ctx* ms)
 	}
 
 	// Trigger keyboard interrupt if necessary (64hz)
-	if (ms->io[3] & 2 && !(ms->interrupt_mask & 2))
+	if (ms->io[IRQ_MASK] & 0x2 && !(ms->interrupt_mask & 0x2))
 	{
-		ms->interrupt_mask |= 2;
+		ms->interrupt_mask |= 0x2;
 		return z80ex_int(ms->z80);
 	}
 
