@@ -404,14 +404,14 @@ Z80EX_BYTE z80ex_pread (
 
 	Z80EX_BYTE ret = 0;
 
-	/* TODO: Refactor this so we're not getting the time on EVERY single
-	 * PORT read.
-	 */
-	time( &theTime );
-	rtc_time = localtime(&theTime);
-
 	/* z80ex sets the upper bits of the port address, we don't want that */
 	port &= 0xFF;
+
+	/* Get the time only if we're accessing timer registers */
+	if (port >= RTC_SEC && port <= RTC_10YR) {
+		time( &theTime );
+		rtc_time = localtime(&theTime);
+	}
 
 	log_debug(" * IO    R [  %02X] -> %02X\n", port, io_read(ms->io, port));
 
