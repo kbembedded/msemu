@@ -76,13 +76,26 @@ Things NOT emulated:
 ### Building
 This project currently requires libz80ex, SDL 1.2 and SDL-gfx 1.2.
 
-Simply run
+To build, cmake 3.7+ is required.
 
-`make`
+Create a build directory, run cmake, and build:
+```
+mkdir build
+cd build
+cmake ..
+cmake --build .
+```
 
-The application can be started with:
+By default, cmake will configure the `Debug` configuration. Other options are `Release`, `MinSizeRel`, and `RelWithDebInfo`. These can be set like so:
+```
+cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
+```
 
-`./src/msemu -c /path/to/codeflash.bin -d /path/to/dataflash.bin`
+### Running
+The application can be started from the build directory with:
+```
+./src/msemu -c /path/to/codeflash.bin -d /path/to/dataflash.bin
+```
 
 If not provided, `msemu` will attempt to open `./codeflash.bin` and `./dataflash.bin` As noted above, codeflash.bin is required for execution as this is the main firmware ROM. If dataflash.bin is not provided, `./dataflash.bin` will be created and populated.
 
