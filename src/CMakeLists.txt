@@ -7,13 +7,12 @@ add_executable(msemu
 )
 
 target_link_libraries(msemu
-	SDL
-	SDLmain
-	SDL_gfx
+	SDL2
+	SDL2main
+	SDL2_gfx
+	SDL2_ttf
 	z80ex
 	z80ex_dasm
 )
 
-target_compile_definitions(msemu PUBLIC
-	LSB_FIRST
-	X86_ASM)
+file(COPY ${CMAKE_SOURCE_DIR}/src/fonts DESTINATION ${CMAKE_BINARY_DIR})
