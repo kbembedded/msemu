@@ -55,15 +55,20 @@ void ui_init(uint32_t* ms_lcd_buffer)
 	SDL_RenderSetLogicalSize(renderer, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
 	/* Load font */
-	font = TTF_OpenFont("fonts/kongtext.ttf", 24);
+	font = TTF_OpenFont("fonts/kongtext.ttf", 16);
 	if (!font) {
 		printf("Failed to load font: %s\n", TTF_GetError());
 		abort();
 	}
 
 	/* Prepare the splashscreen surface */
+	/* TODO: I don't like this in here, the version is a whole project
+	 * identifier and buried in UI seems silly. Need to dig out a not
+	 * terrible way to do this with CMake.
+	 */
 	splashscreen_surface = TTF_RenderText_Blended_Wrapped(
-		font, "Mailstation Emulator v0.2\n\nF12 to Start", font_color, LOGICAL_WIDTH);
+		font, "Mailstation Emulator v0.2\n\n" \
+			"F12 to Start", font_color, LOGICAL_WIDTH);
 	if (!splashscreen_surface) {
 		printf("Error creating splashscreen surface: %s\n", TTF_GetError());
 		abort();
