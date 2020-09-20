@@ -4,12 +4,8 @@
 #include <stdint.h>
 
 // RGBA8888 colors
-#define UI_COLOR_BLACK     (0x00000000)
-#define UI_COLOR_GREEN     (0x00ff0000)
-#define UI_COLOR_DIM_GREEN (0x8ce09d00)
-#define UI_COLOR_DARK_GREY (0x14212600)
-#define UI_COLOR_BLUE      (0x0000ff00)
-#define UI_COLOR_YELLOW    (0x00ffff00)
+#define UI_COLOR_DIM_GREEN (0x9de08c00)
+#define UI_COLOR_DARK_GREY (0x26211400)
 
 
 // These are the colors used for the LCD screen
