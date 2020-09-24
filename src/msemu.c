@@ -7,6 +7,8 @@
  */
 
 #include <assert.h>
+#include <ctype.h> // for isalnum
+#include <memory.h>
 #include <time.h>
 
 #include "debug.h"
@@ -19,6 +21,7 @@
 
 #include <SDL2/SDL.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <z80ex/z80ex.h>
 #include <z80ex/z80ex_dasm.h>
 
@@ -98,6 +101,16 @@ static void ms_set_df_rnd_serial(uint8_t *df_buf)
 
 	df_buf += DF_SN_OFFS;
 
+#if defined(_MSC_VER)
+	srand((unsigned int)time(NULL));
+	for (i = 0; i < 15; i++) {
+		do {
+			rnd = rand();
+		} while (!isalnum(rnd));
+		*df_buf = rnd;
+		df_buf++;
+	}
+#else
 	srandom((unsigned int)time(NULL));
 	for (i = 0; i < 15; i++) {
 		do {
@@ -106,6 +119,7 @@ static void ms_set_df_rnd_serial(uint8_t *df_buf)
 		*df_buf = rnd;
 		df_buf++;
 	}
+#endif
 
 	*df_buf = '-';
 }

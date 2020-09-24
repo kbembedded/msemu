@@ -1,6 +1,6 @@
-#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "debug.h"
 #include "flashops.h"
 #include "msemu.h"
@@ -8,7 +8,12 @@
 #include "ui.h"
 
 #include <SDL2/SDL.h>
-#include <string.h>
+#if defined(_MSC_VER)
+	#include "platform/windows/getopt.h"
+	#include "platform/windows/strndup.h"
+#else
+	#include <getopt.h>
+#endif
 
 void usage(const char *path_arg, const char *cf_path, const char *df_path)
 {

@@ -72,6 +72,8 @@ This project currently requires libz80ex, SDL 2, SDL-image 2, and SDL-ttf 2.
 
 To build, cmake 3.7+ is required.
 
+**Windows Only:** Before building, run `./external/Download-Deps.ps1` to download an setup the SDL2 development packages.
+
 Create a build directory, run cmake, and build:
 ```
 mkdir build
