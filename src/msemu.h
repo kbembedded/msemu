@@ -81,7 +81,7 @@ typedef struct ms_hw {
 	uint8_t *io;
 	uintptr_t dev_map[DEV_CNT];
 
-	uint8_t *lcd_dat8bit;
+	uint32_t *lcd_datRGBA8888;
 	/* TODO: Might be able to remove this 1bit screen representation */
 	uint8_t *lcd_dat1bit;
 
