@@ -8,6 +8,7 @@
 #include "ui.h"
 
 #include <SDL2/SDL.h>
+#include <string.h>
 
 void usage(const char *path_arg, const char *cf_path, const char *df_path)
 {
@@ -35,7 +36,6 @@ int main(int argc, char** argv)
 {
 	int c;
 	int ret = 0;
-	int df_save_to_disk = 1;
 
 	ms_ctx ms;
 
@@ -53,6 +53,7 @@ int main(int argc, char** argv)
 	ms_opts options;
 	options.cf_path = strndup("codeflash.bin", 13);
 	options.df_path = strndup("dataflash.bin", 13);
+	options.df_save_to_disk = 1;
 
 	/* Process arguments */
 	while ((c = getopt_long(argc, argv,
@@ -69,7 +70,7 @@ int main(int argc, char** argv)
 			strncpy(options.df_path, optarg, strlen(optarg)+1);
 			break;
 		  case 'n':
-			df_save_to_disk = 0;
+			options.df_save_to_disk = 0;
 			break;
 		  case 'h':
 		  default:
@@ -79,6 +80,7 @@ int main(int argc, char** argv)
 	}
 
 	// Init mailstation w/ options
+	bzero(&ms, sizeof(ms));
 	if (ms_init(&ms, &options) == MS_ERR) return 1;
 	ui_init(ms.lcd_datRGBA8888);
 
@@ -88,21 +90,7 @@ int main(int argc, char** argv)
 		log_error("mailstation existed with code %d.\n", ret);
 	}
 
-	/* Write dataflash buffer to disk if it was modified */
-	if (ms.dataflash_updated) {
-		if (!df_save_to_disk) {
-			log_error("Not writing modified dataflash to disk!\n");
-		} else {
-			log_error("Writing dataflash buffer to disk\n");
-			ret = buftofile((uint8_t *)ms.dev_map[DF],
-			  options.df_path, SZ_512K);
-			if (ret < SZ_512K) {
-				log_error(
-				  "Failed writing dataflash, only wrote %d\n",
-				  ret);
-			}
-		}
-	}
+	ms_deinit(&ms, &options);
 
 	return ret;
 }

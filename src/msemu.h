@@ -83,6 +83,8 @@ typedef struct ms_hw {
 	uintptr_t slot_map[4];
 
 	uint8_t *io;
+	uint8_t *df;
+	uint8_t *cf;
 	uintptr_t dev_map[DEV_CNT];
 
 	uint32_t *lcd_datRGBA8888;
@@ -99,10 +101,6 @@ typedef struct ms_hw {
 	// Bits specify which interrupts have been triggered (returned on P3)
 	uint8_t interrupt_mask;
 
-	// Signals if the dataflash contents have been changed.
-	// Should be cleared once dataflash is written back to disk.
-	uint8_t dataflash_updated;
-
 	uint8_t key_matrix[10];
 
 	// Holds power button status (returned in P9.4)
@@ -118,6 +116,9 @@ typedef struct ms_opts {
 
 	// Dataflash path
 	char* df_path;
+
+	// Save dataflash back to disk
+	int df_save_to_disk;
 } ms_opts;
 
 /**
@@ -129,6 +130,7 @@ typedef struct ms_opts {
  * Returns `MS_OK` on success, error code on failure
  */
 int ms_init(ms_ctx* ms, ms_opts* options);
+int ms_deinit(ms_ctx* ms, ms_opts* options);
 
 /**
  * Runs the mailstation emulation

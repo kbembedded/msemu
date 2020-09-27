@@ -15,6 +15,7 @@
 #include "sizes.h"
 
 #include <SDL2/SDL.h>
+#include <errno.h>
 #include <z80ex/z80ex.h>
 #include <z80ex/z80ex_dasm.h>
 
@@ -69,6 +70,62 @@ void powerOff(ms_ctx* ms)
 	// clear LCD
 	memset(ms->lcd_datRGBA8888, 0, MS_LCD_WIDTH * MS_LCD_HEIGHT * sizeof(uint32_t));
 	ui_splashscreen_show();
+}
+
+#define DF_SN_OFFS     0x7FFC8
+
+/* Generate and set a random serial number to dataflash buffer that is valid
+ * for Mailstation
+ *
+ * Disassembly of codeflash found that the verification process for serial num
+ * is that it starts at 0x7FFC8, is 16 bytes long, each character must be
+ * ASCII '0'-'9', 'A'-'Z', 'a'-'z', or '-'
+ * In all observed Mailstations, the last character is '-', but it does
+ * not seem to be enforced in Mailstation firmware. Nevertheless, the last char
+ * is set to a '-'
+ */
+static void ms_set_df_rnd_serial(uint8_t *df_buf)
+{
+	int i;
+	uint8_t rnd;
+
+	df_buf += DF_SN_OFFS;
+
+	srandom((unsigned int)time(NULL));
+	for (i = 0; i < 15; i++) {
+		do {
+			rnd = random();
+		} while (!isalnum(rnd));
+		*df_buf = rnd;
+		df_buf++;
+	}
+
+	*df_buf = '-';
+}
+
+/* Check if serial number in dataflash buffer is valid for Mailstation
+ *
+ * Returns 1 if number is valid, 0 if invalid.
+ *
+ * Disassembly of codeflash found that the verification process for serial num
+ * is that it starts at 0x7FFC8, is 16 bytes long, each character must be
+ * ASCII '0'-'9', 'A'-'Z', 'a'-'z', or '-'
+ * In all observed Mailstations, the last character is '-', but it does
+ * not seem to be enforced in Mailstation firmware; it is not enforced here
+ */
+static int ms_serial_valid(uint8_t *df_buf)
+{
+	int i;
+	int ret = MS_OK;
+
+	df_buf += DF_SN_OFFS;
+
+	for (i = 0; i < 16; i++) {
+		if (!isalnum(*df_buf) && *df_buf != '-') ret = MS_ERR;
+		df_buf++;
+	}
+
+	return ret;
 }
 
 //----------------------------------------------------------------------------
@@ -177,7 +234,7 @@ Z80EX_BYTE z80ex_mread(
 	Z80EX_BYTE ret;
 	ms_ctx* ms = (ms_ctx*)user_data;
 	int slot = ((addr & 0xC000) >> 14);
-	int dev = 0xFF;
+	int dev, page;
 
 	debug_testbp(bpMR, addr);
 
@@ -194,16 +251,20 @@ Z80EX_BYTE z80ex_mread(
 	switch (slot) {
 	  case 0:
 		dev = CF;
+		page = 0;
 		break;
 	  /* TODO: Add page range check */
 	  case 1:
 		dev = (ms->io[SLOT4_DEV] & 0x0F);
+		page = ms->io[SLOT4_PAGE];
 		break;
 	  case 2:
 		dev = (ms->io[SLOT8_DEV] & 0x0F);
+		page = ms->io[SLOT4_PAGE];
 		break;
 	  case 3:
 		dev = RAM;
+		page = 0;
 		break;
 	}
 
@@ -227,7 +288,11 @@ Z80EX_BYTE z80ex_mread(
 		break;
 
 	  case CF:
+		ret = cf_read(ms->cf, ((addr & ~0xC000) + (0x4000 * page)));
+		break;
 	  case DF:
+		ret = df_read(ms->df, ((addr & ~0xC000) + (0x4000 * page)));
+		break;
 	  case RAM:
 		ret = *(uint8_t *)(ms->slot_map[slot] + (addr & 0x3FFF));
 		log_debug(" * MEM   R [%04X] -> %02X\n", addr, ret);
@@ -304,9 +369,9 @@ void z80ex_mwrite(
 	  case LCD_R:
 		writeLCD(ms, (addr - (slot << 14)), val, dev);
 		break;
+
 	  case DF:
-		ms->dataflash_updated = df_parse_cmd(ms,
-		  ((addr - (slot << 14)) + (0x4000 * page)), val);
+		df_write(ms->df, ((addr & ~0xC000) + (0x4000 * page)), val);
 		break;
 
 	  case MODEM:
@@ -319,6 +384,7 @@ void z80ex_mwrite(
 		break;
 
 	  case CF:
+		//cf_write(ms->cf, ((addr & ~0xC000) + (0x4000 * page)), val);
 		log_error(" * CF    W [%04X] INVALID, CANNOT W TO CF @ %04X\n",
 		  addr, z80ex_get_reg(ms->z80, regPC));
 		break;
@@ -652,27 +718,12 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	 *
 	 * TODO: Add error checking on the buffer allocation
 	 */
-	ms->dev_map[CF] = (uintptr_t)calloc(SZ_1M, sizeof(uint8_t));
-	ms->dev_map[DF] = (uintptr_t)calloc(SZ_512K, sizeof(uint8_t));
-	ms->dev_map[RAM] = (uintptr_t)calloc(SZ_128K, sizeof(uint8_t));
-	ms->io = (uint8_t *)calloc(SZ_64K, sizeof(uint8_t));
-	ms->lcd_dat1bit = (uint8_t *)calloc(((MS_LCD_WIDTH * MS_LCD_HEIGHT) / 8),
-	  sizeof(uint8_t));
-	/* XXX: MAGIC NUMBEERRRR */
-	/* ms->dev_map[LCD_R] = ms->dev_map[LCD_L] + 4800; */
-	ms->lcd_datRGBA8888 = (uint32_t *)calloc(  MS_LCD_WIDTH * MS_LCD_HEIGHT,
-	  sizeof(uint32_t));
 
-	/* Initialize flags. */
-	ms->lcd_lastupdate = 0;
-	ms->lcd_cas = 0;
-	ms->dataflash_updated = 0;
 	ms->interrupt_mask = 0;
 	ms->power_button = 0;
 	ms->power_state = MS_POWERSTATE_OFF;
 
 	/* Initialize the slot_map */
-	ms->slot_map[0] = ms->dev_map[CF]; /* slot0000 is always CF_0 */
 	ms->slot_map[1] = ms->dev_map[((ms->io[SLOT4_DEV]) & 0x0F)] +
 	  (ms->io[SLOT4_PAGE] * 0x4000);
 	ms->slot_map[2] = ms->dev_map[((ms->io[SLOT8_DEV]) & 0x0F)] +
@@ -690,43 +741,19 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 		z80ex_intread, (void*)ms
 	);
 
-	/* Open codeflash and dump it in to a buffer.
-	 * The codeflash should be exactly 1 MiB.
-	 * Its possible to have a short dump, where the remaining bytes are
-	 * assumed to be zero.
-	 * It should never be longer either. If it is, we just pretend like
-	 * we didn't notice. This might be unwise behavior.
-	 */
-	if (!filetobuf((uint8_t *)ms->dev_map[CF], options->cf_path, SZ_1M)) {
-		log_error("Failed to load codeflash at '%s'. Aborting.\n", options->cf_path);
-		return MS_ERR;
+	if (cf_init(&ms->cf, options) == ENOENT) return MS_ERR;
+	/* XXX: Handle return value here. e.g. new disk, invalid disk, etc. */
+
+	/* If opening a new, blank, DF buffer, then assign it a random MS
+	 * compatible serial number.
+	 * If the DF file opened has an invalid serial number, just complain
+	 * loudly with a warning. */
+	if (df_init(&ms->df, options) == ENOENT) {
+		ms_set_df_rnd_serial(ms->df);
 	}
-	printf("Codeflash loaded from '%s'.\n", options->cf_path);
-
-	/* Open dataflash and dump it in to a buffer.
-	 * The dataflash should be exactly 512 KiB.
-	 * Its possible to have a short dump, where the remaining bytes are
-	 * assumed to be zero. But it in practice shouldn't happen.
-	 * It should never be longer either. If it is, we just pretend like
-	 * we didn't notice. This might be unwise behavior.
-	 */
-	/* If dataflash file does not exist, create random serial number
-	 * If dataflash file does exist, check that the serial number is valid.
-	 *   If it is not a valid serial number, error out because some unknown
-	 *   binary was passed as the dataflash.
-	 */
-	if (!filetobuf((uint8_t *)ms->dev_map[DF], options->df_path, SZ_512K)) {
-
-		printf("Existing dataflash image not found at '%s', creating "
-		  "a new dataflah image.\n", options->df_path);
-		df_set_rnd_serial(ms);
-	} else {
-		if (!df_serial_valid(ms)) {
-			log_error("Binary file '%s', may not be a valid "
-			  "dataflash image (contains invalid serial number)!\n",
-			  options->df_path);
-			return MS_ERR;
-		}
+	if (ms_serial_valid(ms->df)) {
+		printf("WARNING! Dataflash does not have valid serial num!\n");
+		printf("This may not be a dataflash image!\n\n");
 	}
 
 	/* Set up debug hooks */
@@ -735,6 +762,14 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	printf("\nPress ctrl+c to enter interactive Mailstation debugger\n");
 
 	return MS_OK;
+}
+
+int ms_deinit(ms_ctx *ms, ms_opts *options)
+{
+	cf_deinit(&ms->cf, options);
+	df_deinit(&ms->df, options);
+
+	return 0;
 }
 
 int ms_run(ms_ctx* ms)
