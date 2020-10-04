@@ -1,8 +1,8 @@
 
 #include "ui.h"
 
-#include "msemu.h"
 #include "config.h"
+#include "msemu.h"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 
