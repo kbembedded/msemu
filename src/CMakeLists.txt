@@ -9,7 +9,6 @@ add_executable(msemu
 target_link_libraries(msemu
 	SDL2
 	SDL2main
-	SDL2_gfx
 	SDL2_ttf
 	z80ex
 	z80ex_dasm
