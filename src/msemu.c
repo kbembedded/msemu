@@ -23,8 +23,8 @@ uint8_t LCD_bg_color = 2;  // LCD green
 
 // This table translates PC scancodes to the Mailstation key matrix
 int32_t keyTranslateTable[10][8] = {
-	{ SDLK_HOME, SDLK_END, 0, SDLK_F1, SDLK_F2, SDLK_F3, SDLK_F4, SDLK_F5 },
-	{ 0, 0, 0, SDLK_AT, 0, 0, 0, SDLK_PAGEUP },
+	{ SDLK_HOME, SDLK_END, SDLK_INSERT, SDLK_F1, SDLK_F2, SDLK_F3, SDLK_F4, SDLK_F5 },
+	{ 0, 0, 0, SDLK_F6, SDLK_F7, SDLK_F8, SDLK_F9, SDLK_PAGEUP },
 	{ SDLK_BACKQUOTE, SDLK_1, SDLK_2, SDLK_3, SDLK_4, SDLK_5, SDLK_6, SDLK_7 },
 	{ SDLK_8, SDLK_9, SDLK_0, SDLK_MINUS, SDLK_EQUALS, SDLK_BACKSPACE, SDLK_BACKSLASH, SDLK_PAGEDOWN },
 	{ SDLK_TAB, SDLK_q, SDLK_w, SDLK_e, SDLK_r, SDLK_t, SDLK_y, SDLK_u },
