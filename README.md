@@ -8,7 +8,7 @@ Functionality has really only been tested with DET1 models, firmware up to and 3
 
 Additionally, the Mailstation has a dataflash ROM inside. While not exactly required by `msemu`, an image is still needed. A real image can be used, or `msemu` can generate a blank one which the Mailstation firmware will initialize it for use. By default, this file is `./dataflash.bin` if the path is not otherwise specified.
 
-Once the Mailstation firmware is fully booted, it can be interacted with through the keyboard as on real hardware. Some keys are remapped while others are currently completely unmapped. See below for key mappings in msemu.
+Once the Mailstation firmware is fully booted, it can be interacted with through the keyboard as on real hardware. Some keys are remapped. See below for key mappings in msemu.
 
 There is also a **_very_** rudimentary interactive debugger implemented. This allows for setting a breakpoint on a specific PC address, single stepping (which also shows the current opcode and any IO or MEM accesses), and changing the current terminal verbosity output. More information about this is below.
 
@@ -21,21 +21,16 @@ F12     - Mailstation Power button
 L_CTRL  - Function/Fn
 Home    - Main
 End     - Back
+Insert  - Print
 F1      - F1 (leftmost grey key underneath the LCD screen)
 F2      - F2
 F3      - F3
 F4      - F4
 F5      - F5 (rightmost grey key underneath the LCD screen)
-```
-
-##### Unmapped
-A handful of Mailstation  keys are currently unmapped, these are:
-```
-@
-Get E-Mail
-Size
-Spell
-Print
+F6      - @
+F7      - Size
+F8      - Check Spelling
+F9      - Get E-Mail
 ```
 
 #### Control
