@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "msemu.h"
+
 // RGBA8888 colors
 #define UI_COLOR_DIM_GREEN (0x9de08c00)
 #define UI_COLOR_DARK_GREY (0x26211400)
@@ -11,6 +13,8 @@
 // These are the colors used for the LCD screen
 #define UI_LCD_PIXEL_ON  UI_COLOR_DARK_GREY
 #define UI_LCD_PIXEL_OFF UI_COLOR_DIM_GREEN
+
+int ui_kbd_process(ms_ctx *ms);
 
 /**
  * Initializes the user interface.

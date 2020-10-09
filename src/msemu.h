@@ -141,4 +141,6 @@ int ms_deinit(ms_ctx* ms, ms_opts* options);
  */
 int ms_run(ms_ctx* ms);
 
+void ms_power_on_reset(ms_ctx *ms);
+
 #endif // __MSEMU_H_
