@@ -1,6 +1,7 @@
 
 #include "ui.h"
 
+#include "config.h"
 #include "msemu.h"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
@@ -62,12 +63,8 @@ void ui_init(uint32_t* ms_lcd_buffer)
 	}
 
 	/* Prepare the splashscreen surface */
-	/* TODO: I don't like this in here, the version is a whole project
-	 * identifier and buried in UI seems silly. Need to dig out a not
-	 * terrible way to do this with CMake.
-	 */
 	splashscreen_surface = TTF_RenderText_Blended_Wrapped(
-		font, "Mailstation Emulator v0.2\n\n" \
+		font, SPLASH_STR \
 			"F12 to Start", font_color, LOGICAL_WIDTH);
 	if (!splashscreen_surface) {
 		printf("Error creating splashscreen surface: %s\n", TTF_GetError());
