@@ -7,6 +7,7 @@
  */
 
 #include <time.h>
+
 #include "msemu.h"
 #include "flashops.h"
 #include "ui.h"
@@ -732,8 +733,6 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	/* Set up debug hooks */
 	debug_init(ms, z80ex_mread);
 
-	/* TODO: Add git tags to this, because thats neat */
-	printf("\nMailstation Emulator v0.2\n");
 	printf("\nPress ctrl+c to enter interactive Mailstation debugger\n");
 
 	return MS_OK;
