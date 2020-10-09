@@ -82,8 +82,6 @@ typedef struct ms_hw {
 	uintptr_t dev_map[DEV_CNT];
 
 	uint32_t *lcd_datRGBA8888;
-	/* TODO: Might be able to remove this 1bit screen representation */
-	uint8_t *lcd_dat1bit;
 
 	// Stores current LCD column.
 	uint8_t lcd_cas;

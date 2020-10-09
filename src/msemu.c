@@ -76,14 +76,14 @@ void powerOff(ms_ctx* ms)
 //
 void writeLCD(ms_ctx* ms, uint16_t newaddr, uint8_t val, int lcdnum)
 {
-	uint8_t *lcd_ptr;
-	if (lcdnum == LCD_L) lcd_ptr = ms->lcd_dat1bit;
+	uint32_t *lcd_ptr;
+	if (lcdnum == LCD_L) lcd_ptr = ms->lcd_datRGBA8888;
 	/* XXX: Fix the use of this magic number, replace with a const */
-	else lcd_ptr = &ms->lcd_dat1bit[4800];
+	else lcd_ptr = &ms->lcd_datRGBA8888[4800];
 
 	/* XXX: This might need to be reworked to use non-viewable LCD memory */
 	// Wraps memory address if out of bounds
-	if (newaddr >= 240) newaddr %= 240;
+	if (newaddr >= MS_LCD_HEIGHT) newaddr %= MS_LCD_HEIGHT;
 
 	// Check CAS bit on P2
 	if (ms->io[MISC2] & 8)
@@ -93,13 +93,7 @@ void writeLCD(ms_ctx* ms, uint16_t newaddr, uint8_t val, int lcdnum)
 
 		// Write data to currently selected LCD column.
 		// This is just used for reading back LCD contents to the Mailstation quickly.
-		lcd_ptr[newaddr + (ms->lcd_cas * 240)] = val;
-
-
-		/*
-			Write directly to newer 8-bit lcd_data8 buffer now too.
-			This is what will actually be drawn on the emulator screen now.
-		*/
+		lcd_ptr[newaddr + (ms->lcd_cas * MS_LCD_HEIGHT)] = val;
 
 		// Reverse column # (MS col #0 starts on right side)
 		int x = 19 - ms->lcd_cas;
@@ -110,12 +104,9 @@ void writeLCD(ms_ctx* ms, uint16_t newaddr, uint8_t val, int lcdnum)
 		int n;
 		for (n = 0; n < 8; n++)
 		{
-			int idx = n + (x * 8) + (newaddr * 320);
+			int idx = n + (x * 8) + (newaddr * MS_LCD_WIDTH);
 			ms->lcd_datRGBA8888[idx] = ((val >> n) & 1 ? UI_LCD_PIXEL_ON : UI_LCD_PIXEL_OFF);
 		}
-
-		// Let main loop know to update screen with new LCD data
-		ms->lcd_lastupdate = SDL_GetTicks();
 	} else {
 		log_debug(" * LCD%s W [ CAS] <- %02X\n",
 		  lcdnum == LCD_L ? "_L" : "_R", newaddr, val);
@@ -132,22 +123,22 @@ void writeLCD(ms_ctx* ms, uint16_t newaddr, uint8_t val, int lcdnum)
 //
 uint8_t readLCD(ms_ctx* ms, uint16_t newaddr, int lcdnum)
 {
-	uint8_t *lcd_ptr;
+	uint32_t *lcd_ptr;
 	uint8_t ret;
 
-	if (lcdnum == LCD_L) lcd_ptr = ms->lcd_dat1bit;
+	if (lcdnum == LCD_L) lcd_ptr = ms->lcd_datRGBA8888;
 	/* XXX: Fix the use of this magic number, replace with a const */
-	else lcd_ptr = &ms->lcd_dat1bit[4800];
+	else lcd_ptr = &ms->lcd_datRGBA8888[4800];
 
 	/* XXX: This might need to be reworked to use non-viewable LCD memory */
 	// Wraps memory address if out of bounds
-	if (newaddr >= 240) newaddr %= 240;
+	if (newaddr >= MS_LCD_HEIGHT) newaddr %= MS_LCD_HEIGHT;
 
 	// Check CAS bit on P2
 	if (ms->io[MISC2] & 8)
 	{
 		// Return data on currently selected LCD column
-		ret = lcd_ptr[newaddr + (ms->lcd_cas * 240)];
+		ret = lcd_ptr[newaddr + (ms->lcd_cas * MS_LCD_HEIGHT)];
 	} else {
 		// Not sure what this normally returns when CAS bit low!
 		ret = ms->lcd_cas;
@@ -630,7 +621,7 @@ int process_interrupts (ms_ctx* ms)
 //
 void resetMailstation(ms_ctx* ms)
 {
-	memset(ms->lcd_datRGBA8888, 0, 320*240 * sizeof(*ms->lcd_datRGBA8888));
+	memset(ms->lcd_datRGBA8888, 0, MS_LCD_WIDTH*MS_LCD_HEIGHT * sizeof(*ms->lcd_datRGBA8888));
 	memset(ms->io, 0, 64 * 1024);
 	// XXX: Mailstation normally retains RAM I believe.  But Mailstation OS
 	// won't warm-boot properly if we don't erase!  Not sure why yet.
@@ -647,8 +638,6 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	 * Dataflash is 512 KiB
 	 * RAM is 128 KiB
 	 * IO is 64 KiB (Not sure how much is necessary here)
-	 * LCD has two buffers, 8bit and 1bit. The Z80 emulation writes to the
-	 * 1bit buffer, this then translates to the 8bit buffer for SDLs use.
 	 *
 	 * TODO: Add error checking on the buffer allocation
 	 */
@@ -656,10 +645,6 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	ms->dev_map[DF] = (uintptr_t)calloc(SZ_512K, sizeof(uint8_t));
 	ms->dev_map[RAM] = (uintptr_t)calloc(SZ_128K, sizeof(uint8_t));
 	ms->io = (uint8_t *)calloc(SZ_64K, sizeof(uint8_t));
-	ms->lcd_dat1bit = (uint8_t *)calloc(((MS_LCD_WIDTH * MS_LCD_HEIGHT) / 8),
-	  sizeof(uint8_t));
-	/* XXX: MAGIC NUMBEERRRR */
-	/* ms->dev_map[LCD_R] = ms->dev_map[LCD_L] + 4800; */
 	ms->lcd_datRGBA8888 = (uint32_t *)calloc(  MS_LCD_WIDTH * MS_LCD_HEIGHT,
 	  sizeof(uint32_t));
 
@@ -826,17 +811,6 @@ int ms_run(ms_ctx* ms)
 
 		}
 
-		/* Update LCD if modified (at 20ms rate) */
-		/* TODO: Check over this whole process logic */
-		/* NOTE: Cursory glance suggests the screen updates 20ms after
-		 * the screen array changed.
-		 */
-		if (ms->power_state == MS_POWERSTATE_ON && (ms->lcd_lastupdate != 0) &&
-		  (currenttick - ms->lcd_lastupdate >= 20)) {
-			ui_update_lcd();
-			ms->lcd_lastupdate = 0;
-		}
-
 		/* XXX: All of this needs to be reworked to be far more
 		 * efficient.
 		 */
@@ -892,6 +866,12 @@ int ms_run(ms_ctx* ms)
 			}
 		}
 
+		/* Update LCD every 20ms */
+		if (ms->power_state == MS_POWERSTATE_ON &&
+		  (currenttick - ms->lcd_lastupdate >= 20)) {
+			ui_update_lcd();
+			ms->lcd_lastupdate = currenttick;
+		}
 		ui_render();
 
 		// Update SDL ticks

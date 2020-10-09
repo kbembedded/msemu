@@ -23,7 +23,7 @@ int splashscreen_show = 0;
 // LCD
 SDL_Surface* lcd_surface = NULL;
 SDL_Texture* lcd_tex = NULL;
-SDL_Rect lcd_srcRect = { 0, 0, 320, 240 };
+SDL_Rect lcd_srcRect = { 0, 0, MS_LCD_WIDTH, MS_LCD_HEIGHT };
 SDL_Rect lcd_dstRect = { 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT };
 
 /* XXX: This needs rework still*/
@@ -86,13 +86,13 @@ void ui_init(uint32_t* ms_lcd_buffer)
 	splashscreen_dstRect.h = splashscreen_surface->h;
 
 	/* Prepare the MailStation LCD surface */
-	lcd_surface = SDL_CreateRGBSurfaceFrom(ms_lcd_buffer, 320, 240, 32, 1280, 0,0,0,0);
+	lcd_surface = SDL_CreateRGBSurfaceFrom(ms_lcd_buffer, MS_LCD_WIDTH, MS_LCD_HEIGHT, 32, 1280, 0,0,0,0);
 	if (!lcd_surface) {
 		printf("Error creating LCD surface: %s\n", SDL_GetError());
 		abort();
 	}
 
-	lcd_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 320, 240);
+	lcd_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, MS_LCD_WIDTH, MS_LCD_HEIGHT);
 	if (!lcd_tex) {
 		printf("Error creating LCD texture: %s\n", SDL_GetError());
 		abort();
