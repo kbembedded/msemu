@@ -107,6 +107,8 @@ void writeLCD(ms_ctx* ms, uint16_t newaddr, uint8_t val, int lcdnum)
 			int idx = n + (x * 8) + (newaddr * MS_LCD_WIDTH);
 			ms->lcd_datRGBA8888[idx] = ((val >> n) & 1 ? UI_LCD_PIXEL_ON : UI_LCD_PIXEL_OFF);
 		}
+
+		ms->lcd_update = 1;
 	} else {
 		log_debug(" * LCD%s W [ CAS] <- %02X\n",
 		  lcdnum == LCD_L ? "_L" : "_R", newaddr, val);
@@ -649,7 +651,7 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	  sizeof(uint32_t));
 
 	/* Initialize flags. */
-	ms->lcd_lastupdate = 0;
+	ms->lcd_update = 0;
 	ms->lcd_cas = 0;
 	ms->dataflash_updated = 0;
 	ms->interrupt_mask = 0;
@@ -866,11 +868,10 @@ int ms_run(ms_ctx* ms)
 			}
 		}
 
-		/* Update LCD every 20ms */
-		if (ms->power_state == MS_POWERSTATE_ON &&
-		  (currenttick - ms->lcd_lastupdate >= 20)) {
+		/* Update LCD */
+		if (ms->power_state == MS_POWERSTATE_ON && ms->lcd_update == 1) {
 			ui_update_lcd();
-			ms->lcd_lastupdate = currenttick;
+			ms->lcd_update = 0;
 		}
 		ui_render();
 

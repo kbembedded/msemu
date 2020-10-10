@@ -88,7 +88,7 @@ typedef struct ms_hw {
 
 	// timestamp of last lcd draw, used to decide
 	// whether the lcd should be redrawn.
-	uint32_t lcd_lastupdate;
+	uint8_t lcd_update;
 
 	// Bits specify which interrupts have been triggered (returned on P3)
 	uint8_t interrupt_mask;
