@@ -61,7 +61,6 @@ Note that 'q' will exit the emulator the same as pressing ESC on the graphical w
 Things NOT emulated:
 - The modem.
 - The parallel port.
-- Some of the keyboard buttons
 - Variable CPU speed
 - Variable timer/interrupt speeds
 - Writing to the real-time clock
@@ -69,7 +68,7 @@ Things NOT emulated:
 
 
 ### Building
-This project currently requires libz80ex, SDL 2, and SDL-ttf 2.
+This project currently requires libz80ex, SDL 2, SDL-image 2, and SDL-ttf 2.
 
 To build, cmake 3.7+ is required.
 

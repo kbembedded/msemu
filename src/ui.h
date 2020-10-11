@@ -33,6 +33,11 @@ void ui_splashscreen_show();
 void ui_splashscreen_hide();
 
 /**
+ * Turn LED on and off.
+ */
+void ui_update_led(uint8_t on);
+
+/**
  * Tells the UI to update the LCD texture
  * from the LCD buffer.
  */
