@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <assert.h>
 #include <time.h>
 
 #include "msemu.h"
@@ -41,6 +42,41 @@ unsigned char hex2bcd (unsigned char x)
 	return y;
 }
 
+/* Can be called multiple times, will zero the buffer if *ram_buf is not null */
+int ram_init(uint8_t **ram_buf)
+{
+	if (*ram_buf == NULL) {
+		*ram_buf = (uint8_t *)calloc(SZ_128K, sizeof(uint8_t));
+		if (*ram_buf == NULL) {
+			printf("Unable to allocate dataflash buffer\n");
+			exit(EXIT_FAILURE);
+		}
+	} else {
+		/* Buffer is already allocated, just zero it out */
+		bzero(*ram_buf, SZ_128K);
+	}
+
+	return 0;
+}
+
+int ram_deinit(uint8_t **ram_buf)
+{
+	assert(*ram_buf != NULL);
+	free(*ram_buf);
+	return 0;
+}
+
+uint8_t ram_read(uint8_t *ram_buf, unsigned int absolute_addr)
+{
+	return *(ram_buf + absolute_addr);
+}
+
+int ram_write(uint8_t *ram_buf, unsigned int absolute_addr, uint8_t val)
+{
+	*(ram_buf + absolute_addr) = val;
+	return 0;
+}
+
 //----------------------------------------------------------------------------
 //
 //  Resets Mailstation state
@@ -52,7 +88,7 @@ void ms_power_on_reset(ms_ctx *ms)
 	memset(ms->io, 0, 64 * 1024);
 	// XXX: Mailstation normally retains RAM I believe.  But Mailstation OS
 	// won't warm-boot properly if we don't erase!  Not sure why yet.
-	memset((uint8_t *)ms->dev_map[RAM], 0, 128 * 1024);
+	ram_init(&ms->ram);
 	ms->power_state = MS_POWERSTATE_ON;
 	ms->interrupt_mask = 0;
 	z80ex_reset(ms->z80);
@@ -259,7 +295,7 @@ Z80EX_BYTE z80ex_mread(
 		break;
 	  case 2:
 		dev = (ms->io[SLOT8_DEV] & 0x0F);
-		page = ms->io[SLOT4_PAGE];
+		page = ms->io[SLOT8_PAGE];
 		break;
 	  case 3:
 		dev = RAM;
@@ -293,7 +329,8 @@ Z80EX_BYTE z80ex_mread(
 		ret = df_read(ms->df, ((addr & ~0xC000) + (0x4000 * page)));
 		break;
 	  case RAM:
-		ret = *(uint8_t *)(ms->slot_map[slot] + (addr & 0x3FFF));
+		//printf("abs %d, dev %d, page %d\n", (addr & ~0xC000) + (0x4000 * page), dev, page);
+		ret = ram_read(ms->ram, ((addr & ~0xC000) + (0x4000 * page)));
 		log_debug(" * MEM   R [%04X] -> %02X\n", addr, ret);
 		break;
 
@@ -378,7 +415,7 @@ void z80ex_mwrite(
 		break;
 
 	  case RAM:
-		*(uint8_t *)(ms->slot_map[slot] + (addr & 0x3FFF)) = val;
+		ram_write(ms->ram, ((addr & ~0xC000) + (0x4000 * page)), val);
 		log_debug(" * MEM   W [%04X] <- %02X\n", addr, val);
 		break;
 
@@ -679,7 +716,7 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	  (ms->io[SLOT4_PAGE] * 0x4000);
 	ms->slot_map[2] = ms->dev_map[((ms->io[SLOT8_DEV]) & 0x0F)] +
 	  (ms->io[SLOT8_PAGE] * 0x4000);
-	ms->slot_map[3] = ms->dev_map[RAM]; /* slotC000 is always RAM_0 */
+	//ms->slot_map[3] = ms->dev_map[RAM]; /* slotC000 is always RAM_0 */
 
 	/* Set up keyboard emulation array */
 	memset(ms->key_matrix, 0xff, sizeof(ms->key_matrix));
@@ -691,6 +728,8 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 		z80ex_pwrite, (void*)ms,
 		z80ex_intread, (void*)ms
 	);
+
+	if (ram_init(&ms->ram)) return MS_ERR;
 
 	if (cf_init(&ms->cf, options) == ENOENT) return MS_ERR;
 	/* XXX: Handle return value here. e.g. new disk, invalid disk, etc. */
@@ -717,6 +756,7 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 
 int ms_deinit(ms_ctx *ms, ms_opts *options)
 {
+	ram_deinit(&ms->ram);
 	cf_deinit(&ms->cf, options);
 	df_deinit(&ms->df, options);
 

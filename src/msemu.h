@@ -85,6 +85,7 @@ typedef struct ms_hw {
 	uint8_t *io;
 	uint8_t *df;
 	uint8_t *cf;
+	uint8_t *ram;
 	uintptr_t dev_map[DEV_CNT];
 
 	uint32_t *lcd_datRGBA8888;
