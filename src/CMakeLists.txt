@@ -3,9 +3,9 @@ add_executable(msemu
 	flashops.c
 	main.c
 	msemu.c
-    ui.c
-    ${CMAKE_BINARY_DIR}/fonts.c
-    ${CMAKE_BINARY_DIR}/images.c
+	ui.c
+	${CMAKE_BINARY_DIR}/fonts.c
+	${CMAKE_BINARY_DIR}/images.c
 )
 
 target_link_libraries(msemu
@@ -18,23 +18,23 @@ target_link_libraries(msemu
 )
 
 function(create_resources dir output)
-    # Create empty output file
-    file(WRITE ${output} "#include <stdint.h>\n")
-    # Collect input files
-    file(GLOB bins ${dir}/*)
-    # Iterate through input files
-    foreach(bin ${bins})
-        # Get short filename
-        string(REGEX MATCH "([^/]+)$" filename ${bin})
-        # Replace filename spaces & extension separator for C compatibility
-        string(REGEX REPLACE "\\.| |-" "_" filename ${filename})
-        # Read hex data from file
-        file(READ ${bin} filedata HEX)
-        # Convert hex data for C compatibility
-        string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," filedata ${filedata})
-        # Append data to output file
-        file(APPEND ${output} "const uint8_t ${filename}[] = {${filedata}};\nconst uint16_t ${filename}_size = sizeof(${filename});\n")
-    endforeach()
+	# Create empty output file
+	file(WRITE ${output} "#include <stdint.h>\n")
+	# Collect input files
+	file(GLOB bins ${dir}/*)
+	# Iterate through input files
+	foreach(bin ${bins})
+		# Get short filename
+		string(REGEX MATCH "([^/]+)$" filename ${bin})
+		# Replace filename spaces & extension separator for C compatibility
+		string(REGEX REPLACE "\\.| |-" "_" filename ${filename})
+		# Read hex data from file
+		file(READ ${bin} filedata HEX)
+		# Convert hex data for C compatibility
+		string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," filedata ${filedata})
+		# Append data to output file
+		file(APPEND ${output} "const uint8_t ${filename}[] = {${filedata}};\nconst uint16_t ${filename}_size = sizeof(${filename});\n")
+	endforeach()
 endfunction()
 
 create_resources(${CMAKE_SOURCE_DIR}/src/images ${CMAKE_BINARY_DIR}/images.c)
