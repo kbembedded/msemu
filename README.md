@@ -95,4 +95,4 @@ If not provided, `msemu` will attempt to open `./codeflash.bin` and `./dataflash
 
 
 ### History
-This work was originally pioneered by and would not have existed without the effort put in by [Fyberoptic](http://www.fybertech.net/mailstation). A huge thanks to Fyberoptic for letting development of this continue nearly a decade after it was originally started. The first major public release of `msemu`, marked rev 0.1a, was dated 2010/01/05. Original work unlicensed, licensed with permission.
+This work was originally pioneered by and would not have existed without the effort put in by [Fyberoptic](http://www.fybertech.net/mailstation). A huge thanks to Fyberoptic for letting development of this continue nearly a decade after it was originally started. The first major public release of `msemu`, marked rev 0.1a, was dated 2010/01/05. Original work unlicensed, licensed with permission. Splashscreen font by [codeman38](http://www.zone38.net/).
