@@ -4,6 +4,7 @@
 #include "config.h"
 #include "msemu.h"
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
 
 // Main window
@@ -27,12 +28,24 @@ SDL_Texture* lcd_tex = NULL;
 SDL_Rect lcd_srcRect = { 0, 0, 320, 240 };
 SDL_Rect lcd_dstRect = { 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT };
 
+// LED
+#define UI_LED_IMAGE_SIZE 32
+SDL_Surface* led_surface = NULL;
+SDL_Texture* led_tex = NULL;
+SDL_Rect led_srcRect = {0, 0 , UI_LED_IMAGE_SIZE, UI_LED_IMAGE_SIZE};
+SDL_Rect led_dstRect = {LOGICAL_WIDTH - 48, LOGICAL_HEIGHT - 96, UI_LED_IMAGE_SIZE, UI_LED_IMAGE_SIZE};
+
 /* XXX: This needs rework still*/
 void ui_init(uint32_t* ms_lcd_buffer)
 {
-	/* Initialize SDL & SDL_TTF */
+	/* Initialize SDL, SDL_IMG, & SDL_TTF */
 	if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
 		printf("Failed to initialize SDL: %s\n", SDL_GetError());
+		abort();
+	}
+
+	if (IMG_Init(IMG_INIT_PNG) != IMG_INIT_PNG) {
+		printf("Failed to initialize SDL_IMG: %s\n", IMG_GetError());
 		abort();
 	}
 
@@ -94,6 +107,18 @@ void ui_init(uint32_t* ms_lcd_buffer)
 		printf("Error creating LCD texture: %s\n", SDL_GetError());
 		abort();
 	}
+
+	/* Prepare the MailStation LED surface */
+	led_surface = IMG_Load("images/led.png");
+	if (!led_surface) {
+		printf("Error creating LED surface: %s\n", SDL_GetError());
+		abort();
+	}
+
+	led_tex = SDL_CreateTextureFromSurface(renderer, led_surface);
+	if (!led_tex) {
+		printf("Error creating LED texture: %s\n", SDL_GetError());
+	}
 }
 
 void ui_splashscreen_show()
@@ -106,6 +131,11 @@ void ui_splashscreen_hide()
 {
 	printf("Splashscreen OFF\n");
 	splashscreen_show = 0;
+}
+
+void ui_update_led(uint8_t on)
+{
+	led_srcRect.x = UI_LED_IMAGE_SIZE * on;
 }
 
 void ui_update_lcd()
@@ -124,6 +154,11 @@ void ui_render()
 		SDL_RenderCopy(
 			renderer, lcd_tex,
 			&lcd_srcRect, &lcd_dstRect);
+
+		// Render LED
+		SDL_RenderCopy(
+			renderer, led_tex,
+			&led_srcRect, &led_dstRect);
 	}
 
 	// We're rendering back to front, so we always check

@@ -15,6 +15,10 @@
 #define MS_POWERSTATE_ON  1
 #define MS_POWERSTATE_OFF 0
 
+// LED constants
+#define MS_LED_ON 1
+#define MS_LED_OFF 0
+
 enum ms_dev_map {
 	CF    = 0x00,
 	RAM   = 0x01,

@@ -459,7 +459,6 @@ Z80EX_BYTE z80ex_pread (
  *
  * See Mailstation documentation for specific PORT layouts and uses.
  */
-/* XXX: Clean up this LED code at some point, have "real" LED on SDL window */
 void z80ex_pwrite (
 	Z80EX_CONTEXT *cpu,
 	Z80EX_WORD port,
@@ -481,10 +480,10 @@ void z80ex_pwrite (
 		if ((tmp_reg & (1 << 4)) != (val & (1 << 4))) {
 			if (val & (1 << 4)) {
 				tmp_reg |= (1 << 4);
-				printf("LED on\n");
+				ui_update_led(MS_LED_ON);
 			} else {
 				tmp_reg &= ~(1 << 4);
-				printf("LED off\n");
+				ui_update_led(MS_LED_OFF);
 			}
 		}
 		ms->io[port] = val;

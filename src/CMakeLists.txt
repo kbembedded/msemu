@@ -9,9 +9,11 @@ add_executable(msemu
 target_link_libraries(msemu
 	SDL2
 	SDL2main
+	SDL2_image
 	SDL2_ttf
 	z80ex
 	z80ex_dasm
 )
 
 file(COPY ${CMAKE_SOURCE_DIR}/src/fonts DESTINATION ${CMAKE_BINARY_DIR})
+file(COPY ${CMAKE_SOURCE_DIR}/src/images DESTINATION ${CMAKE_BINARY_DIR})
