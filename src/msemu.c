@@ -54,7 +54,7 @@ int ram_init(uint8_t **ram_buf)
 		}
 	} else {
 		/* Buffer is already allocated, just zero it out */
-		bzero(*ram_buf, SZ_128K);
+		memset(*ram_buf, '\0', SZ_128K);
 	}
 
 	return 0;

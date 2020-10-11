@@ -246,7 +246,7 @@ int debug_prompt(void)
 
 	while (1) {
 		printf("> ");
-		bzero(&buf, sizeof(buf));
+		memset(&buf, '\0', sizeof(buf));
 		fgets(buf, sizeof(buf), stdin);
 
 		i = NUMCMDS;
@@ -295,7 +295,7 @@ void debug_dasm(void)
 
 	if (!debug_isbreak() && !(dbg_level & LOG_TRACE)) return;
 
-	bzero(&dasm_buffer, dasm_buffer_len);
+	memset(&dasm_buffer, '\0', dasm_buffer_len);
 	z80ex_dasm(
 	  &dasm_buffer[0], dasm_buffer_len,
 	  0,
