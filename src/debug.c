@@ -7,6 +7,7 @@
 
 #include "debug.h"
 #include "msemu.h"
+#include "io.h"
 
 #include <z80ex/z80ex_dasm.h>
 #include <z80ex/z80ex.h>

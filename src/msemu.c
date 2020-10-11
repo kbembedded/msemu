@@ -9,11 +9,12 @@
 #include <assert.h>
 #include <time.h>
 
-#include "msemu.h"
-#include "flashops.h"
-#include "ui.h"
 #include "debug.h"
+#include "flashops.h"
+#include "msemu.h"
+#include "io.h"
 #include "sizes.h"
+#include "ui.h"
 
 #include <SDL2/SDL.h>
 #include <errno.h>
@@ -48,7 +49,7 @@ int ram_init(uint8_t **ram_buf)
 	if (*ram_buf == NULL) {
 		*ram_buf = (uint8_t *)calloc(SZ_128K, sizeof(uint8_t));
 		if (*ram_buf == NULL) {
-			printf("Unable to allocate dataflash buffer\n");
+			printf("Unable to allocate RAM buffer\n");
 			exit(EXIT_FAILURE);
 		}
 	} else {
@@ -83,12 +84,20 @@ int ram_write(uint8_t *ram_buf, unsigned int absolute_addr, uint8_t val)
 //
 void ms_power_on_reset(ms_ctx *ms)
 {
-	/* XXX: Should this re-load CF/DF? */
+	/* NOTE: While it might seem like it should be done, the keyboard
+	 * matrix, ms->key_matrix, should NOT be reset here. Since this is
+	 * set/cleared by UI functions as time goes on, clearing this for
+	 * a reset could lose keys that are being held down */
+
+	/* XXX: Should this re-load CF/DF?
+	 * CF doesn't make much sense, DF would clobber changes if set to 
+	 * mode to not save */
+
 	memset(ms->lcd_datRGBA8888, 0, 320*240 * sizeof(*ms->lcd_datRGBA8888));
-	memset(ms->io, 0, 64 * 1024);
 	// XXX: Mailstation normally retains RAM I believe.  But Mailstation OS
 	// won't warm-boot properly if we don't erase!  Not sure why yet.
 	ram_init(&ms->ram);
+	io_init(&ms->io);
 	ms->power_state = MS_POWERSTATE_ON;
 	ms->interrupt_mask = 0;
 	z80ex_reset(ms->z80);
@@ -179,7 +188,7 @@ void writeLCD(ms_ctx* ms, uint16_t newaddr, uint8_t val, int lcdnum)
 	if (newaddr >= 240) newaddr %= 240;
 
 	// Check CAS bit on P2
-	if (ms->io[MISC2] & 8)
+	if (io_read(ms->io, MISC2) & 8)
 	{
 		log_debug(" * LCD%s W [%04X] <- %02X\n",
 		  lcdnum == LCD_L ? "_L" : "_R", newaddr, val);
@@ -237,7 +246,7 @@ uint8_t readLCD(ms_ctx* ms, uint16_t newaddr, int lcdnum)
 	if (newaddr >= 240) newaddr %= 240;
 
 	// Check CAS bit on P2
-	if (ms->io[MISC2] & 8)
+	if (io_read(ms->io, MISC2) & 8)
 	{
 		// Return data on currently selected LCD column
 		ret = lcd_ptr[newaddr + (ms->lcd_cas * 240)];
@@ -290,12 +299,12 @@ Z80EX_BYTE z80ex_mread(
 		break;
 	  /* TODO: Add page range check */
 	  case 1:
-		dev = (ms->io[SLOT4_DEV] & 0x0F);
-		page = ms->io[SLOT4_PAGE];
+		dev = (io_read(ms->io, SLOT4_DEV) & 0x0F);
+		page = io_read(ms->io, SLOT4_PAGE);
 		break;
 	  case 2:
-		dev = (ms->io[SLOT8_DEV] & 0x0F);
-		page = ms->io[SLOT8_PAGE];
+		dev = (io_read(ms->io, SLOT8_DEV) & 0x0F);
+		page = io_read(ms->io, SLOT8_PAGE);
 		break;
 	  case 3:
 		dev = RAM;
@@ -374,6 +383,18 @@ void z80ex_mwrite(
 	 * 4 bits set, this can screw up our logic here. The reason for the
 	 * bits being set is unknown at this time.
 	 */
+	  /* For each slot, recalculate the slot_map from the now set device
+	   * and page combination.
+	   *
+	   * NOTE!
+	   * It's been observed that writes of SLOTX_DEV ports, the upper 4
+	   * bits are sometimes set. The meaning of these bits is unknown and
+	   * may just be "dontcare" to the decode logic; so the MS firmware
+	   * does not worry about clearing them when writing the respective
+	   * PORT. It is unknown if not writing the full 8bit value to the PORT
+	   * is problematic. Therefore, when setting up the slot_map we AND
+	   * the lower 4 bits.
+	   */
 	switch (slot) {
 	  case 0:
 		dev = CF;
@@ -381,12 +402,12 @@ void z80ex_mwrite(
 		break;
 	  /* TODO: Add page range check */
 	  case 1:
-		dev = (ms->io[SLOT4_DEV] & 0x0F);
-		page = ms->io[SLOT4_PAGE];
+		dev = (io_read(ms->io, SLOT4_DEV) & 0x0F);
+		page = io_read(ms->io, SLOT4_PAGE);
 		break;
 	  case 2:
-		dev = (ms->io[SLOT8_DEV] & 0x0F);
-		page = ms->io[SLOT8_PAGE];
+		dev = (io_read(ms->io, SLOT8_DEV) & 0x0F);
+		page = io_read(ms->io, SLOT8_PAGE);
 		break;
 	  case 3:
 		dev = RAM;
@@ -469,12 +490,13 @@ Z80EX_BYTE z80ex_pread (
 	/* z80ex sets the upper bits of the port address, we don't want that */
 	port &= 0xFF;
 
-	log_debug(" * IO    R [  %02X] -> %02X\n", port, ms->io[port]);
+	log_debug(" * IO    R [  %02X] -> %02X\n", port, io_read(ms->io, port));
 
 	switch (port) {
 	  case KEYBOARD:// emulate keyboard matrix output
 		// keyboard row is 10 bits wide, P1.x = low bits, P2.0-1 = high bits
-		kbaddr = ms->io[KEYBOARD] + ((ms->io[MISC2] & 3) << 8);
+		/* XXX: This is REAL clunky */
+		kbaddr = (io_read(ms->io, KEYBOARD)) + (((io_read(ms->io, MISC2)) & 3) << 8);
 
 		// all returned bits should be high unless a key is pressed
 		kbresult = 0xFF;
@@ -543,7 +565,7 @@ Z80EX_BYTE z80ex_pread (
 		break;
 
 	  default:
-		ret = ms->io[port];
+		ret = io_read(ms->io, port);
 		break;
 	}
 
@@ -588,39 +610,13 @@ void z80ex_pwrite (
 				ui_update_led(MS_LED_OFF);
 			}
 		}
-		ms->io[port] = val;
+		io_write(ms->io, port, val);
 		break;
 
 	  // set interrupt masks
 	  case IRQ_MASK:
 		ms->interrupt_mask &= val;
-		ms->io[port] = val;
-		break;
-
-	  /* For each slot, recalculate the slot_map from the now set device
-	   * and page combination.
-	   *
-	   * NOTE!
-	   * It's been observed that writes of SLOTX_DEV ports, the upper 4
-	   * bits are sometimes set. The meaning of these bits is unknown and
-	   * may just be "dontcare" to the decode logic; so the MS firmware
-	   * does not worry about clearing them when writing the respective
-	   * PORT. It is unknown if not writing the full 8bit value to the PORT
-	   * is problematic. Therefore, when setting up the slot_map we AND
-	   * the lower 4 bits.
-	   */
-	  case SLOT4_PAGE:
-	  case SLOT4_DEV:
-		ms->io[port] = val;
-		ms->slot_map[1] = ms->dev_map[((ms->io[SLOT4_DEV]) & 0x0F)] +
-		  (ms->io[SLOT4_PAGE] * 0x4000);
-		break;
-
-	  case SLOT8_PAGE:
-	  case SLOT8_DEV:
-		ms->io[port] = val;
-		ms->slot_map[2] = ms->dev_map[((ms->io[SLOT8_DEV]) & 0x0F)] +
-		  (ms->io[SLOT8_PAGE] * 0x4000);
+		io_write(ms->io, port, val);
 		break;
 
 	  // check for hardware power off bit in P28
@@ -629,13 +625,12 @@ void z80ex_pwrite (
 			printf("POWER OFF\n");
 			ms_power_off(ms);
 		}
-		ms->io[port] = val;
+		io_write(ms->io, port, val);
 		break;
 
 	  // otherwise just save written value
 	  default:
-		//printf("* UNKNOWN IO -> %04X - %02X\n",port, val);
-		ms->io[port] = val;
+		io_write(ms->io, port, val);
 		break;
 	}
 }
@@ -676,7 +671,7 @@ int process_interrupts (ms_ctx* ms)
 		icount = 0;
 
 		// do time16 interrupt
-		if (ms->io[3] & 0x10 && !(ms->interrupt_mask & 0x10))
+		if ((io_read(ms->io, IRQ_MASK) & 0x10) && !(ms->interrupt_mask & 0x10))
 		{
 			ms->interrupt_mask |= 0x10;
 			return z80ex_int(ms->z80);
@@ -684,7 +679,7 @@ int process_interrupts (ms_ctx* ms)
 	}
 
 	// Trigger keyboard interrupt if necessary (64hz)
-	if (ms->io[3] & 2 && !(ms->interrupt_mask & 2))
+	if ((io_read(ms->io, IRQ_MASK) & 2) && !(ms->interrupt_mask & 2))
 	{
 		ms->interrupt_mask |= 2;
 		return z80ex_int(ms->z80);
@@ -700,23 +695,14 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	 * Codeflash is 1 MiB
 	 * Dataflash is 512 KiB
 	 * RAM is 128 KiB
-	 * IO is 64 KiB (Not sure how much is necessary here)
+	 * IO is 256 B
 	 * LCD has two buffers, 8bit and 1bit. The Z80 emulation writes to the
 	 * 1bit buffer, this then translates to the 8bit buffer for SDLs use.
-	 *
-	 * TODO: Add error checking on the buffer allocation
 	 */
 
 	ms->interrupt_mask = 0;
 	ms->power_button = 0;
 	ms->power_state = MS_POWERSTATE_OFF;
-
-	/* Initialize the slot_map */
-	ms->slot_map[1] = ms->dev_map[((ms->io[SLOT4_DEV]) & 0x0F)] +
-	  (ms->io[SLOT4_PAGE] * 0x4000);
-	ms->slot_map[2] = ms->dev_map[((ms->io[SLOT8_DEV]) & 0x0F)] +
-	  (ms->io[SLOT8_PAGE] * 0x4000);
-	//ms->slot_map[3] = ms->dev_map[RAM]; /* slotC000 is always RAM_0 */
 
 	/* Set up keyboard emulation array */
 	memset(ms->key_matrix, 0xff, sizeof(ms->key_matrix));
@@ -729,10 +715,10 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 		z80ex_intread, (void*)ms
 	);
 
+	if (io_init(&ms->io)) return MS_ERR;
 	if (ram_init(&ms->ram)) return MS_ERR;
 
 	if (cf_init(&ms->cf, options) == ENOENT) return MS_ERR;
-	/* XXX: Handle return value here. e.g. new disk, invalid disk, etc. */
 
 	/* If opening a new, blank, DF buffer, then assign it a random MS
 	 * compatible serial number.
@@ -756,6 +742,7 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 
 int ms_deinit(ms_ctx *ms, ms_opts *options)
 {
+	io_deinit(&ms->io);
 	ram_deinit(&ms->ram);
 	cf_deinit(&ms->cf, options);
 	df_deinit(&ms->df, options);

@@ -3,6 +3,7 @@ add_executable(msemu
 	flashops.c
 	main.c
 	msemu.c
+	io.c
 	ui.c
 )
 
