@@ -2,6 +2,8 @@
 #include "ui.h"
 
 #include "config.h"
+#include "fonts.h"
+#include "images.h"
 #include "msemu.h"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
@@ -10,10 +12,13 @@
 // Main window
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
+SDL_RWops* stream = NULL;
 #define LOGICAL_WIDTH  640
 #define LOGICAL_HEIGHT 480
 
 // Splashscreen
+extern const uint8_t kongtext_ttf[];
+extern const uint16_t kongtext_ttf_size;
 SDL_Surface* splashscreen_surface = NULL;
 SDL_Texture* splashscreen_tex = NULL;
 SDL_Rect splashscreen_srcRect = { 0, 0, 0, 0 };
@@ -30,6 +35,8 @@ SDL_Rect lcd_dstRect = { 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT };
 
 // LED
 #define UI_LED_IMAGE_SIZE 32
+extern const uint8_t led_png[];
+extern const uint16_t led_png_size;
 SDL_Surface* led_surface = NULL;
 SDL_Texture* led_tex = NULL;
 SDL_Rect led_srcRect = {0, 0 , UI_LED_IMAGE_SIZE, UI_LED_IMAGE_SIZE};
@@ -69,7 +76,13 @@ void ui_init(uint32_t* ms_lcd_buffer)
 	SDL_RenderSetLogicalSize(renderer, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
 	/* Load font */
-	font = TTF_OpenFont("fonts/kongtext.ttf", 16);
+	stream = SDL_RWFromConstMem(kongtext_ttf, kongtext_ttf_size);
+	if (!stream) {
+		printf("Error creating font stream: %s\n", SDL_GetError());
+		abort();
+	}
+
+	font = TTF_OpenFontRW(stream, 0, 16);
 	if (!font) {
 		printf("Failed to load font: %s\n", TTF_GetError());
 		abort();
@@ -109,7 +122,13 @@ void ui_init(uint32_t* ms_lcd_buffer)
 	}
 
 	/* Prepare the MailStation LED surface */
-	led_surface = IMG_Load("images/led.png");
+	stream = SDL_RWFromConstMem(led_png, led_png_size);
+	if (!stream) {
+		printf("Error creating LED stream: %s\n", SDL_GetError());
+		abort();
+	}
+
+	led_surface = IMG_LoadPNG_RW(stream);
 	if (!led_surface) {
 		printf("Error creating LED surface: %s\n", SDL_GetError());
 		abort();
