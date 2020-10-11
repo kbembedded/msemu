@@ -2,8 +2,6 @@
 #include "ui.h"
 
 #include "config.h"
-#include "fonts.h"
-#include "images.h"
 #include "msemu.h"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>

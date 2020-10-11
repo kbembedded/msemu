@@ -3,7 +3,9 @@ add_executable(msemu
 	flashops.c
 	main.c
 	msemu.c
-	ui.c
+    ui.c
+    ${CMAKE_BINARY_DIR}/fonts.c
+    ${CMAKE_BINARY_DIR}/images.c
 )
 
 target_link_libraries(msemu
@@ -17,7 +19,7 @@ target_link_libraries(msemu
 
 function(create_resources dir output)
     # Create empty output file
-    file(WRITE ${output} "")
+    file(WRITE ${output} "#include <stdint.h>\n")
     # Collect input files
     file(GLOB bins ${dir}/*)
     # Iterate through input files
@@ -35,5 +37,5 @@ function(create_resources dir output)
     endforeach()
 endfunction()
 
-create_resources(${CMAKE_SOURCE_DIR}/src/images ${CMAKE_BINARY_DIR}/images.h)
-create_resources(${CMAKE_SOURCE_DIR}/src/fonts ${CMAKE_BINARY_DIR}/fonts.h)
+create_resources(${CMAKE_SOURCE_DIR}/src/images ${CMAKE_BINARY_DIR}/images.c)
+create_resources(${CMAKE_SOURCE_DIR}/src/fonts ${CMAKE_BINARY_DIR}/fonts.c)
