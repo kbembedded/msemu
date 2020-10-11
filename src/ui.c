@@ -2,6 +2,8 @@
 #include "ui.h"
 
 #include "config.h"
+#include "fonts.h"
+#include "images.h"
 #include "msemu.h"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
@@ -15,8 +17,6 @@ SDL_RWops* stream = NULL;
 #define LOGICAL_HEIGHT 480
 
 // Splashscreen
-extern const uint8_t kongtext_ttf[];
-extern const uint16_t kongtext_ttf_size;
 SDL_Surface* splashscreen_surface = NULL;
 SDL_Texture* splashscreen_tex = NULL;
 SDL_Rect splashscreen_srcRect = { 0, 0, 0, 0 };
@@ -33,8 +33,6 @@ SDL_Rect lcd_dstRect = { 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT };
 
 // LED
 #define UI_LED_IMAGE_SIZE 32
-extern const uint8_t led_png[];
-extern const uint16_t led_png_size;
 SDL_Surface* led_surface = NULL;
 SDL_Texture* led_tex = NULL;
 SDL_Rect led_srcRect = {0, 0 , UI_LED_IMAGE_SIZE, UI_LED_IMAGE_SIZE};
