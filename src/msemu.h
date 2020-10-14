@@ -7,10 +7,6 @@
 #define MS_OK    0
 #define MS_ERR   1
 
-// Default screen size
-#define MS_LCD_WIDTH 	320
-#define MS_LCD_HEIGHT	240
-
 // Power state constants
 #define MS_POWERSTATE_ON  1
 #define MS_POWERSTATE_OFF 0
@@ -46,7 +42,7 @@ typedef struct ms_hw {
 	uint8_t *lcd_dat1bit;
 
 	// Stores current LCD column.
-	uint8_t lcd_cas;
+	int lcd_cas;
 
 	// timestamp of last lcd draw, used to decide
 	// whether the lcd should be redrawn.

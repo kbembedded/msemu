@@ -11,6 +11,7 @@
 
 #include "debug.h"
 #include "flashops.h"
+#include "lcd.h"
 #include "msemu.h"
 #include "io.h"
 #include "sizes.h"
@@ -78,44 +79,6 @@ int ram_write(uint8_t *ram_buf, unsigned int absolute_addr, uint8_t val)
 	return 0;
 }
 
-//----------------------------------------------------------------------------
-//
-//  Resets Mailstation state
-//
-void ms_power_on_reset(ms_ctx *ms)
-{
-	/* NOTE: While it might seem like it should be done, the keyboard
-	 * matrix, ms->key_matrix, should NOT be reset here. Since this is
-	 * set/cleared by UI functions as time goes on, clearing this for
-	 * a reset could lose keys that are being held down */
-
-	/* XXX: Should this re-load CF/DF?
-	 * CF doesn't make much sense, DF would clobber changes if set to 
-	 * mode to not save */
-
-	memset(ms->lcd_datRGBA8888, 0, 320*240 * sizeof(*ms->lcd_datRGBA8888));
-	// XXX: Mailstation normally retains RAM I believe.  But Mailstation OS
-	// won't warm-boot properly if we don't erase!  Not sure why yet.
-	ram_init(&ms->ram);
-	io_init(&ms->io);
-	ms->power_state = MS_POWERSTATE_ON;
-	ms->interrupt_mask = 0;
-	z80ex_reset(ms->z80);
-}
-
-//----------------------------------------------------------------------------
-//
-//  Disables emulation, displays opening screen
-//
-void ms_power_off(ms_ctx* ms)
-{
-	ms->power_state = MS_POWERSTATE_OFF;
-
-	// clear LCD
-	memset(ms->lcd_datRGBA8888, 0, MS_LCD_WIDTH * MS_LCD_HEIGHT * sizeof(uint32_t));
-	ui_splashscreen_show();
-}
-
 #define DF_SN_OFFS     0x7FFC8
 
 /* Generate and set a random serial number to dataflash buffer that is valid
@@ -174,91 +137,37 @@ static int ms_serial_valid(uint8_t *df_buf)
 
 //----------------------------------------------------------------------------
 //
-//  Emulates writing to Mailstation LCD device
+//  Resets Mailstation state
 //
-void writeLCD(ms_ctx* ms, uint16_t newaddr, uint8_t val, int lcdnum)
+void ms_power_on_reset(ms_ctx *ms)
 {
-	uint8_t *lcd_ptr;
-	if (lcdnum == LCD_L) lcd_ptr = ms->lcd_dat1bit;
-	/* XXX: Fix the use of this magic number, replace with a const */
-	else lcd_ptr = &ms->lcd_dat1bit[4800];
+	/* NOTE: While it might seem like it should be done, the keyboard
+	 * matrix, ms->key_matrix, should NOT be reset here. Since this is
+	 * set/cleared by UI functions as time goes on, clearing this for
+	 * a reset could lose keys that are being held down */
 
-	/* XXX: This might need to be reworked to use non-viewable LCD memory */
-	// Wraps memory address if out of bounds
-	if (newaddr >= 240) newaddr %= 240;
+	/* NOTE: The MS doesn't have a RAM clear at power on to the best of my
+	 * knowlegde. However, the emulation doesn't work quite right if RAM
+	 * is not cleared. This might be worth looking further in to at some
+	 * point. */
 
-	// Check CAS bit on P2
-	if (io_read(ms->io, MISC2) & 8)
-	{
-		log_debug(" * LCD%s W [%04X] <- %02X\n",
-		  lcdnum == LCD_L ? "_L" : "_R", newaddr, val);
-
-		// Write data to currently selected LCD column.
-		// This is just used for reading back LCD contents to the Mailstation quickly.
-		lcd_ptr[newaddr + (ms->lcd_cas * 240)] = val;
-
-
-		/*
-			Write directly to newer 8-bit lcd_data8 buffer now too.
-			This is what will actually be drawn on the emulator screen now.
-		*/
-
-		// Reverse column # (MS col #0 starts on right side)
-		int x = 19 - ms->lcd_cas;
-		// Use right half if necessary
-		if (lcdnum == LCD_R) x += 20;
-
-		// Write out all 8 bits to separate bytes, using the current emulated LCD color
-		int n;
-		for (n = 0; n < 8; n++)
-		{
-			int idx = n + (x * 8) + (newaddr * 320);
-			ms->lcd_datRGBA8888[idx] = ((val >> n) & 1 ? UI_LCD_PIXEL_ON : UI_LCD_PIXEL_OFF);
-		}
-
-		// Let main loop know to update screen with new LCD data
-		ms->lcd_lastupdate = SDL_GetTicks();
-	} else {
-		log_debug(" * LCD%s W [ CAS] <- %02X\n",
-		  lcdnum == LCD_L ? "_L" : "_R", newaddr, val);
-
-		// If CAS line is low, set current column instead
-		ms->lcd_cas = val;
-	}
+	lcd_init(&ms->lcd_dat1bit, &ms->lcd_datRGBA8888, &ms->lcd_cas);
+	ram_init(&ms->ram);
+	io_init(&ms->io);
+	ms->power_state = MS_POWERSTATE_ON;
+	ms->interrupt_mask = 0;
+	z80ex_reset(ms->z80);
 }
-
 
 //----------------------------------------------------------------------------
 //
-//  Emulates reading from Mailstation LCD
+//  Disables emulation, displays opening screen
 //
-uint8_t readLCD(ms_ctx* ms, uint16_t newaddr, int lcdnum)
+void ms_power_off(ms_ctx* ms)
 {
-	uint8_t *lcd_ptr;
-	uint8_t ret;
+	ms->power_state = MS_POWERSTATE_OFF;
 
-	if (lcdnum == LCD_L) lcd_ptr = ms->lcd_dat1bit;
-	/* XXX: Fix the use of this magic number, replace with a const */
-	else lcd_ptr = &ms->lcd_dat1bit[4800];
-
-	/* XXX: This might need to be reworked to use non-viewable LCD memory */
-	// Wraps memory address if out of bounds
-	if (newaddr >= 240) newaddr %= 240;
-
-	// Check CAS bit on P2
-	if (io_read(ms->io, MISC2) & 8)
-	{
-		// Return data on currently selected LCD column
-		ret = lcd_ptr[newaddr + (ms->lcd_cas * 240)];
-	} else {
-		// Not sure what this normally returns when CAS bit low!
-		ret = ms->lcd_cas;
-	}
-
-	log_debug(" * LCD%s R [%04X] -> %02X\n",
-	  lcdnum == LCD_L ? "_L" : "_R", newaddr, ret);
-
-	return ret;
+	ui_splashscreen_show();
 }
 
 /* z80ex Read memory callback function.
@@ -314,7 +223,7 @@ Z80EX_BYTE z80ex_mread(
 
 
 	switch (dev) {
-	  /* Right now, readLCD() needs an addr & 0x3FFF.
+	  /* Right now, lcd_read() needs an addr & 0x3FFF.
 	   * This falls within the range of the buffer regardless of the slot
 	   * the actual device is in.
 	   *
@@ -323,7 +232,7 @@ Z80EX_BYTE z80ex_mread(
 	   */
 	  case LCD_L:
 	  case LCD_R:
-		ret = readLCD(ms, (addr - (slot << 14)), dev);
+		ret = lcd_read(ms->lcd_dat1bit, ms->lcd_datRGBA8888, &ms->lcd_cas, ms->io, (addr - (slot << 14)), dev);
 		break;
 
 	  case MODEM:
@@ -417,14 +326,14 @@ void z80ex_mwrite(
 
 
 	switch (dev) {
-	  /* Right now, writeLCD() and df_parse_cmd() need an addr & 0x3FFF.
+	  /* Right now, lcd_write() and df_parse_cmd() need an addr & 0x3FFF.
 	   * This falls within the range of the buffer regardless of the slot
 	   * the actual device is in. Since slots are paged, the final address
 	   * passed to df_parse_cmd() is offset by page_sz * page_num
 	   */
 	  case LCD_L:
 	  case LCD_R:
-		writeLCD(ms, (addr - (slot << 14)), val, dev);
+		lcd_write(ms->lcd_dat1bit, ms->lcd_datRGBA8888, &ms->lcd_cas, ms->io, (addr - (slot << 14)), val, dev);
 		break;
 
 	  case DF:
@@ -715,6 +624,8 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 		z80ex_intread, (void*)ms
 	);
 
+	if (lcd_init(&ms->lcd_dat1bit, &ms->lcd_datRGBA8888, &ms->lcd_cas))
+		return MS_ERR;
 	if (io_init(&ms->io)) return MS_ERR;
 	if (ram_init(&ms->ram)) return MS_ERR;
 
