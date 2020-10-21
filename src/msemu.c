@@ -514,7 +514,6 @@ void z80ex_pwrite (
 {
 
 	ms_ctx* ms = (ms_ctx*)user_data;
-	static uint8_t tmp_reg;
 
 
 	/* z80ex sets the upper bits of the port address, we don't want that */
@@ -524,15 +523,7 @@ void z80ex_pwrite (
 
 	switch (port) {
 	  case MISC2:
-		if ((tmp_reg & (1 << 4)) != (val & (1 << 4))) {
-			if (val & (1 << 4)) {
-				tmp_reg |= (1 << 4);
-				ui_update_led(MS_LED_ON);
-			} else {
-				tmp_reg &= ~(1 << 4);
-				ui_update_led(MS_LED_OFF);
-			}
-		}
+		ui_update_led(!!(val & MISC2_LED_BIT));
 		io_write(ms->io, port, val);
 		break;
 
