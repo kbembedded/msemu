@@ -186,7 +186,7 @@ void ms_power_off(ms_ctx* ms)
 
 /* z80ex Read memory callback function.
  *
- * Return a uint8_t from the address given to us.
+ * Return a Z80EX_BYTE (uint8_t) from the address given to us.
  * This function needs to figure out what slot the requested address lies in,
  * figure out what page of which device is in that slot, and return data.
  *
@@ -236,17 +236,17 @@ Z80EX_BYTE z80ex_mread(
 	}
 
 
+	/* Nearly all read functions are passed an absolute address inside the
+	 * device. This is generally calculated by taking the lower 14bits of
+	 * the address (this localizes the address inside the slot) and adding
+	 * that to (page * page_size).
+	 * In the case of the LCD which only uses a single page, just the
+	 * lower 14bits of address are passed.
+	 */
 	switch (dev) {
-	  /* Right now, lcd_read() needs an addr & 0x3FFF.
-	   * This falls within the range of the buffer regardless of the slot
-	   * the actual device is in.
-	   *
-	   * Unlike the write path, reading from dataflash doesn't require an
-	   * external call and can be handled like CF or RAM.
-	   */
 	  case LCD_L:
 	  case LCD_R:
-		ret = lcd_read(ms->lcd_dat1bit, ms->lcd_datRGBA8888, &ms->lcd_cas, ms->io, (addr - (slot << 14)), dev);
+		ret = lcd_read(ms->lcd_dat1bit, ms->lcd_datRGBA8888, &ms->lcd_cas, ms->io, (addr & ~0xC000), dev);
 		break;
 
 	  case MODEM:
@@ -257,11 +257,12 @@ Z80EX_BYTE z80ex_mread(
 	  case CF:
 		ret = cf_read(ms->cf, ((addr & ~0xC000) + (0x4000 * page)));
 		break;
+
 	  case DF:
 		ret = df_read(ms->df, ((addr & ~0xC000) + (0x4000 * page)));
 		break;
+
 	  case RAM:
-		//printf("abs %d, dev %d, page %d\n", (addr & ~0xC000) + (0x4000 * page), dev, page);
 		ret = ram_read(ms->ram, ((addr & ~0xC000) + (0x4000 * page)));
 		log_debug(" * MEM   R [%04X] -> %02X\n", addr, ret);
 		break;
@@ -281,7 +282,7 @@ Z80EX_BYTE z80ex_mread(
  *
  * Write a uint8_t to the address given to us.
  * This function needs to figure out what slot the requested address lies in,
- * figure out what page of which device is in that slot, and return data.
+ * figure out what page of which device is in that slot, and write data.
  */
 void z80ex_mwrite(
 	Z80EX_CONTEXT *cpu,
@@ -306,18 +307,6 @@ void z80ex_mwrite(
 	 * 4 bits set, this can screw up our logic here. The reason for the
 	 * bits being set is unknown at this time.
 	 */
-	  /* For each slot, recalculate the slot_map from the now set device
-	   * and page combination.
-	   *
-	   * NOTE!
-	   * It's been observed that writes of SLOTX_DEV ports, the upper 4
-	   * bits are sometimes set. The meaning of these bits is unknown and
-	   * may just be "dontcare" to the decode logic; so the MS firmware
-	   * does not worry about clearing them when writing the respective
-	   * PORT. It is unknown if not writing the full 8bit value to the PORT
-	   * is problematic. Therefore, when setting up the slot_map we AND
-	   * the lower 4 bits.
-	   */
 	switch (slot) {
 	  case 0:
 		dev = CF;
@@ -340,14 +329,16 @@ void z80ex_mwrite(
 
 
 	switch (dev) {
-	  /* Right now, lcd_write() and df_parse_cmd() need an addr & 0x3FFF.
-	   * This falls within the range of the buffer regardless of the slot
-	   * the actual device is in. Since slots are paged, the final address
-	   * passed to df_parse_cmd() is offset by page_sz * page_num
-	   */
+	/* Nearly all read functions are passed an absolute address inside the
+	 * device. This is generally calculated by taking the lower 14bits of
+	 * the address (this localizes the address inside the slot) and adding
+	 * that to (page * page_size).
+	 * In the case of the LCD which only uses a single page, just the
+	 * lower 14bits of address are passed.
+	 */
 	  case LCD_L:
 	  case LCD_R:
-		lcd_write(ms->lcd_dat1bit, ms->lcd_datRGBA8888, &ms->lcd_cas, ms->io, (addr - (slot << 14)), val, dev);
+		lcd_write(ms->lcd_dat1bit, ms->lcd_datRGBA8888, &ms->lcd_cas, ms->io, (addr & ~0xC000), val, dev);
 		break;
 
 	  case DF:
@@ -364,7 +355,6 @@ void z80ex_mwrite(
 		break;
 
 	  case CF:
-		//cf_write(ms->cf, ((addr & ~0xC000) + (0x4000 * page)), val);
 		log_error(" * CF    W [%04X] INVALID, CANNOT W TO CF @ %04X\n",
 		  addr, z80ex_get_reg(ms->z80, regPC));
 		break;
@@ -379,14 +369,13 @@ void z80ex_mwrite(
 
 /* z80ex Read from PORT callback function
  *
- * Return a Z80EX_BYTE (uint8_t basically) value of the requested PORT number.
+ * Return a Z80EX_BYTE (uint8_t) value of the requested PORT number.
  * Many ports are read and written as normal and have no emulation impact.
  * However a handful of ports do special things and are required for useable
  * emulation. These cases are specially handled as needed.
  *
  * See Mailstation documentation for specific PORT layouts and uses.
  */
-/* TODO: Use enum for bit positions within regs */
 Z80EX_BYTE z80ex_pread (
 	Z80EX_CONTEXT *cpu,
 	Z80EX_WORD port,
@@ -404,7 +393,9 @@ Z80EX_BYTE z80ex_pread (
 
 	Z80EX_BYTE ret = 0;
 
-	/* z80ex sets the upper bits of the port address, we don't want that */
+	/* Z80 IO commands end up with the upper byte of the port address set,
+	 * this appears to be unused in the MS and only the lower byte should
+	 * be evaluated for the port number */
 	port &= 0xFF;
 
 	/* Get the time only if we're accessing timer registers */
@@ -516,7 +507,9 @@ void z80ex_pwrite (
 	ms_ctx* ms = (ms_ctx*)user_data;
 
 
-	/* z80ex sets the upper bits of the port address, we don't want that */
+	/* Z80 IO commands end up with the upper byte of the port address set,
+	 * this appears to be unused in the MS and only the lower byte should
+	 * be evaluated for the port number */
 	port &= 0xFF;
 
 	log_debug(" * IO    W [  %02X] <- %02X\n", port, val);
