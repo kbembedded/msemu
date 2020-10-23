@@ -10,7 +10,7 @@ enum bp_type {
 	bpMW,
 };
 
-/* Initialize the debug layer. 
+/* Initialize the debug layer.
  * The z80ex_dasm() call uses the mread callback to read the instruction at the
  * current PC. In order to get that info, the mread callback, which uses ms_ctx
  * as the user_data, need to both be passed to this function.
@@ -43,7 +43,7 @@ void debug_dasm(void);
  * debug_testbp() must be called with the proper enum type as well as the
  * relevant address.
  * If a breakpoint has been hit, this will return 1 and also cause debug_isbreak
- * to return 1. 
+ * to return 1.
  */
 int debug_testbp(enum bp_type type, Z80EX_WORD addr);
 
