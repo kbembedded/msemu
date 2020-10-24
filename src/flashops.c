@@ -192,8 +192,6 @@ uint8_t df_read(uint8_t *df_buf, unsigned int absolute_addr)
  * The read path of the dataflash does not have a command associated with it,
  * therefore this is function is only useful for writing/erasing the DF
  *
- * Software data protection status is _NOT_ implemented by this function!
- *
  * Currently just returns MS_OK, could potentially return operational errors,
  * e.g. Cycle/Command mismatches, unknown/invalid commands, etc.
  * While there are a few different possible errors, they are not indicated
