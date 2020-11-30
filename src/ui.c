@@ -270,7 +270,7 @@ int ui_kbd_process(ms_ctx *ms)
 				}
 			}
 
-			/* Keys pressed whie right ctrl is held */
+			/* Keys pressed while right ctrl is held */
 			if (event.key.keysym.mod & KMOD_RCTRL) {
 				if (event.type == SDL_KEYDOWN) {
 					switch (event.key.keysym.sym) {
