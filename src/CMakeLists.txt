@@ -1,8 +1,10 @@
 add_executable(msemu
 	debug.c
 	flashops.c
+	lcd.c
 	main.c
 	msemu.c
+	io.c
 	ui.c
 )
 
