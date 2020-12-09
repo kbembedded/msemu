@@ -373,3 +373,37 @@ int debug_testbp(enum bp_type type, Z80EX_WORD addr)
 
 	return debug_isbreak();
 }
+
+void debug_msfw_lut(ms_ctx *ms)
+{
+	uint16_t sp;
+
+	switch (z80ex_get_reg(ms->z80, regPC)) {
+	  case 0x0692:
+		sp = z80ex_get_reg(ms->z80, regSP);
+		printf("New Widget, type: 0x%04X, flags: 0x%04X, left: 0x%04X,"\
+		  " top: 0x%04X, width: 0x%04X, height: 0x%04X, appid: 0x%04X,"\
+		  " seqnum: 0x%04X, str_etc: 0x%04X\n",
+		  (ms_mread(ms->z80, sp+2, 0, ms) | ms_mread(ms->z80, sp+3, 0, ms) << 8),
+		  (ms_mread(ms->z80, sp+4, 0, ms) | ms_mread(ms->z80, sp+5, 0, ms) << 8),
+		  (ms_mread(ms->z80, sp+6, 0, ms) | ms_mread(ms->z80, sp+7, 0, ms) << 8),
+		  (ms_mread(ms->z80, sp+8, 0, ms) | ms_mread(ms->z80, sp+9, 0, ms) << 8),
+		  (ms_mread(ms->z80, sp+10, 0, ms) | ms_mread(ms->z80, sp+11, 0, ms) << 8),
+		  (ms_mread(ms->z80, sp+12, 0, ms) | ms_mread(ms->z80, sp+13, 0, ms) << 8),
+		  (ms_mread(ms->z80, sp+14, 0, ms) | ms_mread(ms->z80, sp+15, 0, ms) << 8),
+		  (ms_mread(ms->z80, sp+16, 0, ms) | ms_mread(ms->z80, sp+17, 0, ms) << 8),
+		  (ms_mread(ms->z80, sp+18, 0, ms) | ms_mread(ms->z80, sp+19, 0, ms) << 8));
+		break;
+	  case 0x064A:
+		sp = z80ex_get_reg(ms->z80, regSP);
+		printf("Widget event, handle: 0x%04X, signal: 0x%04X,"\
+		  " arg1: 0x%04X, arg2: 0x%04X\n",
+		  (ms_mread(ms->z80, sp+2, 0, ms) | ms_mread(ms->z80, sp+3, 0, ms) << 8),
+		  (ms_mread(ms->z80, sp+4, 0, ms) | ms_mread(ms->z80, sp+5, 0, ms) << 8),
+		  (ms_mread(ms->z80, sp+6, 0, ms) | ms_mread(ms->z80, sp+7, 0, ms) << 8),
+		  (ms_mread(ms->z80, sp+8, 0, ms) | ms_mread(ms->z80, sp+9, 0, ms) << 8));
+		break;
+	  default:
+		break;
+	}
+}

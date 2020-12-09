@@ -768,6 +768,8 @@ int ms_run(ms_ctx* ms)
 						tstate_counter += z80ex_step(ms->z80);
 					} while (z80ex_last_op_type(ms->z80));
 
+					debug_msfw_lut(ms);
+
 					if (debug_testbp(bpPC,
 					  z80ex_get_reg(ms->z80, regPC))) {
 						break;
