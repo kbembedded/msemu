@@ -71,4 +71,5 @@ void log_trace(char *str, ...);
  */
 void log_debug(char *str, ...);
 
+void debug_msfw_lut(ms_ctx *ms);
 #endif
