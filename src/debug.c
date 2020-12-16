@@ -329,14 +329,12 @@ void debug_dasm(void)
 	  debug_dasm_readbyte,
 	  z80ex_get_reg(ms->z80, regPC),
 	  ms);
-	if (strstr(dasm_buffer, "CALL") != NULL) {
-		log_trace("%04x: %-15s  t=%d", z80ex_get_reg(ms->z80, regPC),
-		  dasm_buffer, dasm_tstates);
-		if(dasm_tstates2) {
-			log_trace("/%d", dasm_tstates2);
-		}
-		log_trace("\n");
+	log_trace("%04x: %-15s  t=%d", z80ex_get_reg(ms->z80, regPC),
+	  dasm_buffer, dasm_tstates);
+	if(dasm_tstates2) {
+		log_trace("/%d", dasm_tstates2);
 	}
+	log_trace("\n");
 
 }
 
