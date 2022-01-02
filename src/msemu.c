@@ -594,6 +594,13 @@ int process_interrupts (ms_ctx* ms)
 		return z80ex_int(ms->z80);
 	}
 
+	/* XXX: Hack to always call interrupt.
+	 * When testing FyOS v0.1, if this int doesn't fire then it breaks.
+	 * v0.1 Uses INT mode 2 with a hack to implement its own INT handler,
+	 * and for some reason needs an interrupt more than just the two
+	 * masks that are used at the moment. There might be another timer?
+	 * Either way, this should be addressed at some point. */
+	return z80ex_int(ms->z80);
 	// Otherwise ignore this
 	return 0;
 }
