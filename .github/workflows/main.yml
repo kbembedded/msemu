@@ -3,15 +3,32 @@ name: Build
 on: [push, pull_request]
 
 jobs:
-  build:
+  build-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - name: Checkout
+        uses: actions/checkout@v1
       - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libz80ex-dev
       - name: Make
+        run: |
+          mkdir build
+          cd build
+          cmake -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
+          cmake --build .
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+      - name: Install Dependencies
+        run: ./external/Download-Deps.ps1
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1.0.2
+      - name: Build
         run: |
           mkdir build
           cd build

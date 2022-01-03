@@ -1,0 +1,13 @@
+diff --git a/z80ex.c b/z80ex.c
+index 3cab53e..c95f842 100644
+--- a/z80ex.c
++++ b/z80ex.c
+@@ -32,7 +32,7 @@
+ #include "opcodes/opcodes_ddcb.c"
+ #include "opcodes/opcodes_fdcb.c"
+ 
+-#define DOQUOTE(x) #x
++#define DOQUOTE(x) "#x"
+ #define TOSTRING(x) DOQUOTE(x)
+ 
+ static char revision_type[]=TOSTRING(Z80EX_RELEASE_TYPE);

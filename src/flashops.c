@@ -10,6 +10,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(_MSC_VER)
+#include <basetsd.h>
+typedef SSIZE_T ssize_t;
+#endif
+
 /* Struct to handle software data protection of the 28SF040
  * The dataflash starts out locked, so in order to get back to the locked
  * state, the whole array must be traversed. In msemu, a counter can be

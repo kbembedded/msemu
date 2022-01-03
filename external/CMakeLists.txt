@@ -1,0 +1,28 @@
+include(${CMAKE_ROOT}/Modules/ExternalProject.cmake)
+
+set(OUTPUT_DIR_ARGS
+	-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY=${CMAKE_BINARY_DIR}/lib
+	-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=${CMAKE_BINARY_DIR}/lib
+	-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=${CMAKE_BINARY_DIR}/bin
+)
+
+ExternalProject_Add(
+	Z80EX
+
+	GIT_REPOSITORY "https://github.com/lipro/z80ex/"
+	GIT_TAG "master"
+	GIT_SHALLOW ON
+
+	UPDATE_COMMAND ""
+	PATCH_COMMAND git apply ${CMAKE_CURRENT_SOURCE_DIR}/z80ex.0001.patch
+	INSTALL_COMMAND cmake -E echo "Skipping install step."
+
+	SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/z80ex"
+	CMAKE_ARGS ${OUTPUT_DIR_ARGS} -DRELEASE_TYPE=msemu
+)
+
+ExternalProject_Add_Step(
+	Z80EX CopyIncludes
+	DEPENDEES download
+	COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/z80ex/include ${CMAKE_BINARY_DIR}/include/z80ex
+)

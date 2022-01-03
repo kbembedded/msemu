@@ -1,4 +1,12 @@
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+	set (PLATFORM_SOURCES
+		platform/windows/getopt.c
+		platform/windows/strndup.c
+	)
+endif ()
+
 add_executable(msemu
+	${PLATFORM_SOURCES}
 	debug.c
 	flashops.c
 	lcd.c
@@ -6,6 +14,35 @@ add_executable(msemu
 	msemu.c
 	io.c
 	ui.c
+)
+
+if (BUILD_DEPENDENCIES)
+	# Adds dependency on locally build copy of z80ex
+	add_dependencies(msemu Z80EX)
+
+	# Adds downloaded dependencies to include/link dirs
+	target_include_directories(msemu PRIVATE ${EXTERNAL_INCLUDE_DIR})
+	target_link_directories(msemu PRIVATE ${EXTERNAL_LIBRARY_DIR})
+
+	# Copy DLL's to target dir
+	file(GLOB EXTERNAL_DLLS "${EXTERNAL_LIBRARY_DIR}/*.dll")
+	foreach(EXTERNAL_DLL IN LISTS EXTERNAL_DLLS)
+		add_custom_command(TARGET msemu POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different ${EXTERNAL_DLL} $<TARGET_FILE_DIR:msemu>
+			COMMENT "Copying ${EXTERNAL_DLL} to build directory"
+		)
+	endforeach()
+endif  ()
+
+target_include_directories(
+	msemu PRIVATE
+	${CMAKE_BINARY_DIR}/include
+)
+
+target_link_directories(
+	msemu PRIVATE
+	${CMAKE_BINARY_DIR}/lib
+	${CMAKE_BINARY_DIR}/bin
 )
 
 target_link_libraries(msemu
