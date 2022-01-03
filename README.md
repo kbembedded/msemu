@@ -66,14 +66,16 @@ Things NOT emulated:
 - Writing to the real-time clock
 - Standard INT handling
 
+### Developer Quick Start
 
-### Building
-This project currently requires libz80ex, SDL 2, SDL-image 2, and SDL-ttf 2.
+#### Prerequisites
+* cmake 3.7+
+* libz80ex, SDL 2, SDL-image 2, and SDL-ttf 2
+  * **(Linux)** Install via your package manager
+  * **(Windows)** Run `./external/Download-Deps.ps1` to install these.
+* **(Windows)** Visual Studio 2019 or [Build Tools for Visual Studio 2019](https://aka.ms/vs/16/release/vs_BuildTools.exe) (other versions of VS may work, but are not tested)
 
-To build, cmake 3.7+ is required.
-
-**Windows Only:** Before building, run `./external/Download-Deps.ps1` to download an setup the SDL2 development packages.
-
+#### Building
 Create a build directory, run cmake, and build:
 ```
 mkdir build
@@ -87,7 +89,7 @@ By default, cmake will configure the `Debug` configuration. Other options are `R
 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
 ```
 
-### Running
+#### Running
 The application can be started from the build directory with:
 ```
 ./src/msemu -c /path/to/codeflash.bin -d /path/to/dataflash.bin
