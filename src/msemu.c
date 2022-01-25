@@ -47,18 +47,30 @@ unsigned char hex2bcd (unsigned char x)
 	return y;
 }
 
-/* Can be called multiple times, will zero the buffer if *ram_buf is not null */
+/* Can be called multiple times, will init the buffer if *ram_buf is not null
+ * Buffer initialization is done by randomizing the whole RAM buffer. It has
+ * been observed that maintaining RAM values across boots causes issues. This
+ * is a good indication that SRAM retention modes are not used while in a
+ * poweroff state. */
 int ram_init(uint8_t **ram_buf)
 {
+	int i;
+	uint8_t *ram_ptr;
+
 	if (*ram_buf == NULL) {
 		*ram_buf = (uint8_t *)calloc(SZ_128K, sizeof(uint8_t));
 		if (*ram_buf == NULL) {
 			printf("Unable to allocate RAM buffer\n");
 			exit(EXIT_FAILURE);
 		}
-	} else {
-		/* Buffer is already allocated, just zero it out */
-		memset(*ram_buf, '\0', SZ_128K);
+	}
+
+	/* Buffer has been allocated, throw random data in it
+	 * to simulate SRAM startup */
+	ram_ptr = *ram_buf;
+	for (i = 0; i < SZ_128K; i++) {
+		*ram_ptr = rand() & 0xFF;
+		ram_ptr++;
 	}
 
 	return 0;
@@ -101,8 +113,6 @@ static void ms_set_df_rnd_serial(uint8_t *df_buf)
 
 	df_buf += DF_SN_OFFS;
 
-#if defined(_MSC_VER)
-	srand((unsigned int)time(NULL));
 	for (i = 0; i < 15; i++) {
 		do {
 			rnd = rand();
@@ -110,16 +120,6 @@ static void ms_set_df_rnd_serial(uint8_t *df_buf)
 		*df_buf = rnd;
 		df_buf++;
 	}
-#else
-	srandom((unsigned int)time(NULL));
-	for (i = 0; i < 15; i++) {
-		do {
-			rnd = random();
-		} while (!isalnum(rnd));
-		*df_buf = rnd;
-		df_buf++;
-	}
-#endif
 
 	*df_buf = '-';
 }
@@ -159,11 +159,6 @@ void ms_power_on_reset(ms_ctx *ms)
 	 * matrix, ms->key_matrix, should NOT be reset here. Since this is
 	 * set/cleared by UI functions as time goes on, clearing this for
 	 * a reset could lose keys that are being held down */
-
-	/* NOTE: The MS doesn't have a RAM clear at power on to the best of my
-	 * knowlegde. However, the emulation doesn't work quite right if RAM
-	 * is not cleared. This might be worth looking further in to at some
-	 * point. */
 
 	lcd_init(&ms->lcd_dat1bit, &ms->lcd_datRGBA8888, &ms->lcd_cas);
 	ram_init(&ms->ram);
@@ -550,6 +545,10 @@ void z80ex_pwrite (
  * must provide intread capability. In theory, the return data should be fully
  * random as in real hardware these pins all go high impedance with no pull
  * resistors.
+ *
+ * XXX: In practice, this causes issues if the return is 0xff, though this
+ * is likely application depedant. Because of that, just return 0x00 for
+ * now.
  */
 Z80EX_BYTE z80ex_intread (
 	Z80EX_CONTEXT *cpu,
@@ -626,6 +625,9 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	 * LCD has two buffers, 8bit and 1bit. The Z80 emulation writes to the
 	 * 1bit buffer, this then translates to the 8bit buffer for SDLs use.
 	 */
+
+	/* Seed (non-critical) RNG with time */
+	srand((unsigned int)time(NULL));
 
 	ms->interrupt_mask = 0;
 	ms->power_button = 0;
