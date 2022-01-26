@@ -322,3 +322,95 @@ int cf_write(uint8_t *cf_buf, unsigned int absolute_addr, uint8_t val)
 	return 0;
 }
 
+
+/****************************************************
+ * RAM Functions
+ ***************************************************/
+
+/* This function has some subtle complexity and different calling "modes"
+ * The first time this is called, the buffer is allocated. If, as part of
+ * the commandline options, a path to a binary was passed, this binary is
+ * captured to a separate buffer.
+ * After which, the buffer is stuffed with random data similar to how SRAM
+ * functions at power-on. (It has been observed that keeping RAM state between
+ * boots causes issues. This is a good indication that SRAM retention modes are
+ * not used by the MS in its powered down state).
+ * At this point, if the image buffer is valid, it is then loaded in to the
+ * actual RAM buffer.
+ * Subequent calls to ram_init() can be made. The *options arg can be NULL
+ * for these. The RAM is given new random data, and if the image buffer is
+ * valid, this is re-applied to RAM.
+ *
+ * There is some shoddyness in the fact that the image buffer is a global
+ * here. This should be refactored out at some point.
+ */
+static uint8_t *image_buf = NULL;
+int ram_init(uint8_t **ram_buf, ms_opts *options)
+{
+	int i;
+	uint8_t *ram_ptr;
+	static int image_len = 0;
+
+	if (*ram_buf == NULL) {
+		*ram_buf = (uint8_t *)calloc(SZ_128K, sizeof(uint8_t));
+		if (*ram_buf == NULL) {
+			printf("Unable to allocate RAM buffer\n");
+			exit(EXIT_FAILURE);
+		}
+
+		/* If a RAM image file was specified, load it. Otherwise, the RAM
+		 * buffer will just keep its random contents.
+		 * The image file can really be any length. If it is shorter than
+		 * 128 KiB, then that shouldn't cause any issues since the buffer
+		 * was already populate with random contents.
+		 */
+		if (options->ram_path != NULL) {
+			image_buf = (uint8_t *)calloc(SZ_128K, sizeof(uint8_t));
+			image_len = filetobuf(image_buf, options->ram_path, SZ_128K);
+			if (!image_len) {
+				log_error("Failed to load RAM image from '%s'.\n", options->ram_path);
+				free(image_buf);
+				image_buf = NULL;
+				return ENOENT;
+			}
+	        }
+	}
+
+	/* Buffer has been allocated, throw random data in it
+	 * to simulate SRAM startup */
+	ram_ptr = *ram_buf;
+	for (i = 0; i < SZ_128K; i++) {
+		*ram_ptr = rand() & 0xFF;
+		ram_ptr++;
+	}
+
+	/* If image_buf is not null, that is, an image was loaded in to it
+	 * at first ram_init() call, then reload those contents back in */
+	if (image_buf != NULL) {
+		strncpy(*ram_buf, image_buf, image_len);
+	}
+
+
+	return 0;
+}
+
+int ram_deinit(uint8_t **ram_buf)
+{
+	assert(*ram_buf != NULL);
+	free(*ram_buf);
+	/* XXX: All of this may want to be refactored at some point so
+	 * image_buf isn't a global */
+	free(image_buf);
+	return 0;
+}
+
+uint8_t ram_read(uint8_t *ram_buf, unsigned int absolute_addr)
+{
+	return *(ram_buf + absolute_addr);
+}
+
+int ram_write(uint8_t *ram_buf, unsigned int absolute_addr, uint8_t val)
+{
+	*(ram_buf + absolute_addr) = val;
+	return 0;
+}

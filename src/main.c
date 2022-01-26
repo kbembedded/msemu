@@ -27,7 +27,12 @@ void usage(const char *path_arg, const char *cf_path, const char *df_path)
 	  "Options:\n"
 	  "  -c <path>, --codeflash <path>  Path to codeflash ROM (def: %s)\n"
 	  "  -d <path>, --dataflash <path>  Path to dataflash ROM (def: %s)\n"
-	  "  -n                             Don't write changes back to disk\n"
+	  "  -r <path>, --ram <path>        Path to RAM image. Meant for pre-loading an image\n"
+	  "                                 in to RAM. Image is set in place each time RAM is\n"
+	  "                                 normally initialized (e.g. poweron). RAM images are\n"
+	  "                                 never written back to disk. If not specified, RAM is\n"
+	  "                                 initialized with random data (normal for SRAM).\n"
+	  "  -n                             Don't write dataflash/codeflash changes back to disk\n"
 	  "  -h, --help                     This usage information\n\n"
 
 	  "Debugger:\n"
@@ -48,6 +53,7 @@ int main(int argc, char** argv)
 	  { "help", no_argument, NULL, 'h' },
 	  { "codeflash", required_argument, NULL, 'c' },
 	  { "dataflash", required_argument, NULL, 'd' },
+	  { "ram", required_argument, NULL, 'r' },
 	/* TODO: Add argument to start with debug console open, e.g. execution
 	 * halted.
 	 */
@@ -58,11 +64,12 @@ int main(int argc, char** argv)
 	ms_opts options;
 	options.cf_path = strndup("codeflash.bin", 13);
 	options.df_path = strndup("dataflash.bin", 13);
+	options.ram_path = NULL;
 	options.df_save_to_disk = 1;
 
 	/* Process arguments */
 	while ((c = getopt_long(argc, argv,
-	  "hc:d:n", long_opts, NULL)) != -1) {
+	  "hc:d:r:n", long_opts, NULL)) != -1) {
 		switch(c) {
 		  case 'c':
 			options.cf_path = malloc(strlen(optarg)+1);
@@ -73,6 +80,11 @@ int main(int argc, char** argv)
 			options.df_path = malloc(strlen(optarg)+1);
 			/* TODO: Implement error handling here */
 			strncpy(options.df_path, optarg, strlen(optarg)+1);
+			break;
+		  case 'r':
+			options.ram_path = malloc(strlen(optarg)+1);
+			/* TODO: Implement error handling here */
+			strncpy(options.ram_path, optarg, strlen(optarg)+1);
 			break;
 		  case 'n':
 			options.df_save_to_disk = 0;

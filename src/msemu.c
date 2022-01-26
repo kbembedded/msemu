@@ -47,53 +47,6 @@ unsigned char hex2bcd (unsigned char x)
 	return y;
 }
 
-/* Can be called multiple times, will init the buffer if *ram_buf is not null
- * Buffer initialization is done by randomizing the whole RAM buffer. It has
- * been observed that maintaining RAM values across boots causes issues. This
- * is a good indication that SRAM retention modes are not used while in a
- * poweroff state. */
-int ram_init(uint8_t **ram_buf)
-{
-	int i;
-	uint8_t *ram_ptr;
-
-	if (*ram_buf == NULL) {
-		*ram_buf = (uint8_t *)calloc(SZ_128K, sizeof(uint8_t));
-		if (*ram_buf == NULL) {
-			printf("Unable to allocate RAM buffer\n");
-			exit(EXIT_FAILURE);
-		}
-	}
-
-	/* Buffer has been allocated, throw random data in it
-	 * to simulate SRAM startup */
-	ram_ptr = *ram_buf;
-	for (i = 0; i < SZ_128K; i++) {
-		*ram_ptr = rand() & 0xFF;
-		ram_ptr++;
-	}
-
-	return 0;
-}
-
-int ram_deinit(uint8_t **ram_buf)
-{
-	assert(*ram_buf != NULL);
-	free(*ram_buf);
-	return 0;
-}
-
-uint8_t ram_read(uint8_t *ram_buf, unsigned int absolute_addr)
-{
-	return *(ram_buf + absolute_addr);
-}
-
-int ram_write(uint8_t *ram_buf, unsigned int absolute_addr, uint8_t val)
-{
-	*(ram_buf + absolute_addr) = val;
-	return 0;
-}
-
 #define DF_SN_OFFS     0x7FFC8
 
 /* Generate and set a random serial number to dataflash buffer that is valid
@@ -161,7 +114,7 @@ void ms_power_on_reset(ms_ctx *ms)
 	 * a reset could lose keys that are being held down */
 
 	lcd_init(&ms->lcd_dat1bit, &ms->lcd_datRGBA8888, &ms->lcd_cas);
-	ram_init(&ms->ram);
+	ram_init(&ms->ram, NULL);
 	io_init(&ms->io);
 	ms->power_state = MS_POWERSTATE_ON;
 	ms->interrupt_mask = 0;
@@ -647,7 +600,7 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	if (lcd_init(&ms->lcd_dat1bit, &ms->lcd_datRGBA8888, &ms->lcd_cas))
 		return MS_ERR;
 	if (io_init(&ms->io)) return MS_ERR;
-	if (ram_init(&ms->ram)) return MS_ERR;
+	if (ram_init(&ms->ram, options)) return MS_ERR;
 
 	if (cf_init(&ms->cf, options) == ENOENT) return MS_ERR;
 

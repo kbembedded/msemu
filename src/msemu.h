@@ -59,10 +59,13 @@ typedef struct ms_hw {
 
 typedef struct ms_opts {
 	// Codeflash path
-	char* cf_path;
+	char *cf_path;
 
 	// Dataflash path
-	char* df_path;
+	char *df_path;
+
+	// RAM image path
+	char *ram_path;
 
 	// Save dataflash back to disk
 	int df_save_to_disk;
