@@ -74,8 +74,9 @@
  * io_init can be called multiple times, will re-zero buffer if prev. allocated
  *
  * *ms			- Pointer to ms_ctx struct
+ * *options             - Point to ms_opts struct, used for setting RAM mod on start
  */
-int io_init(ms_ctx *ms);
+int io_init(ms_ctx *ms, ms_opts *options);
 int io_deinit(ms_ctx *ms);
 
 /**

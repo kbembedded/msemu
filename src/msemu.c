@@ -120,7 +120,7 @@ void ms_power_on_reset(ms_ctx *ms)
 	ms->power_state = MS_POWERSTATE_ON;
 	printf("POWER ON\n");
 	lcd_init(ms);
-	io_init(ms);
+	io_init(ms, NULL);
 	ms->interrupt_mask = 0;
 	z80ex_reset(ms->z80);
 	ui_splashscreen_hide();
@@ -208,6 +208,15 @@ Z80EX_BYTE z80ex_mread(
 		break;
 	}
 
+	/* P28.3, if set, sets all CF access to RAM with address 14, aka 0x4000,
+	 * aka OR page 1. Any other accesses are unaffected. */
+	if (io_read(ms, UNKNOWN0x28) & 0x8) {
+		if (dev == CF) {
+			dev = RAM;
+			page |= 1;
+		}
+	}
+
 
 	/* Nearly all read functions are passed an absolute address inside the
 	 * device. This is generally calculated by taking the lower 14bits of
@@ -282,8 +291,17 @@ void z80ex_mwrite(
 	 */
 	switch (slot) {
 	  case 0:
-		dev = CF;
-		page = 0;
+		/* P28.3, if set, overrides CFp0 in Slot0 to RAMp1. This is
+		 * a mod that Fyber did originally and, until there is a reason
+		 * to change it for real hardware, we can leave it here for
+		 * testing purposes */
+		if (io_read(ms, UNKNOWN0x28) & 0x8) {
+			dev = RAM;
+			page = 1;
+		} else {
+			dev = CF;
+			page = 0;
+		}
 		break;
 	  /* TODO: Add page range check */
 	  case 1:
@@ -665,7 +683,7 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 
 	/* Initialize buffers for emulating the various peripherals */
 	if (lcd_init(ms)) return MS_ERR;
-	if (io_init(ms)) return MS_ERR;
+	if (io_init(ms, options)) return MS_ERR;
 	if (ram_init(ms, options)) return MS_ERR;
 	if (cf_init(ms, options) == ENOENT) return MS_ERR;
 

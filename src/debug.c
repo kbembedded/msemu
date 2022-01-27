@@ -223,10 +223,13 @@ static void examine(void *nan)
 	z80ex_get_reg(ms->z80,regIM), z80ex_get_reg(ms->z80,regIFF1),
 	z80ex_get_reg(ms->z80,regIFF2));
 
-	printf("slot4000: %sp%02d\n", ms_dev_map_text[ms->io[SLOT4_DEV] & 0x0F],
-	  ms->io[SLOT4_PAGE]);
-	printf("slot8000: %sp%02d\n", ms_dev_map_text[ms->io[SLOT8_DEV] & 0x0F],
-	  ms->io[SLOT8_PAGE]);
+	printf("slot0000: ");
+	if (io_read(ms, UNKNOWN0x28) & 0x8) printf("RAMp01\n");
+	else printf("CFp00\n");
+	printf("slot4000: %sp%02d\n", ms_dev_map_text[io_read(ms, SLOT4_DEV) & 0x0F],
+	  io_read(ms, SLOT4_PAGE));
+	printf("slot8000: %sp%02d\n", ms_dev_map_text[io_read(ms, SLOT8_DEV) & 0x0F],
+	  io_read(ms, SLOT8_PAGE));
 }
 
 /* Debug support */

@@ -102,6 +102,9 @@ typedef struct ms_opts {
 
 	// Initial AC state;
 	int ac_start;
+
+	// Start msemu with RAM mod set at power-on-reset
+	int ram_mod_por;
 } ms_opts;
 
 /**

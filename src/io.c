@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "io.h"
 #include "msemu.h"
 #include "sizes.h"
 
@@ -28,18 +29,30 @@
  * because this implementation is limited to 256 ports.
  */
 
-/* Can be called multiple times, will zero the buffer if *io_buf is not null */
-int io_init(ms_ctx *ms)
+/* The options struct passed here will tell us if we should enable the RAM
+ * mod on startup after init. This is a hack and probably should be refactored
+ * at some point to be a bit cleaner
+ */
+/* Can be called multiple times, will zero the IO buffer on subsequent calls */
+int io_init(ms_ctx *ms, ms_opts *options)
 {
+	static int do_ram_mod; /* XXX: hack */
+
 	if (ms->io == NULL) {
 		ms->io = (uint8_t *)calloc(SZ_256, sizeof(uint8_t));
 		if (ms->io == NULL) {
 			printf("Unable to allocate IO buffer\n");
 			exit(EXIT_FAILURE);
 		}
+		do_ram_mod = options->ram_mod_por;
 	} else {
 		/* Buffer is already allocated, just zero it out */
 		memset(ms->io, '\0', SZ_256);
+	}
+
+	if (do_ram_mod) {
+		io_write(ms, UNKNOWN0x28,
+			io_read(ms, UNKNOWN0x28) | 0x8);
 	}
 
 	return MS_OK;

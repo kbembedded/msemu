@@ -32,6 +32,8 @@ void usage(const char *path_arg, const char *cf_path, const char *df_path)
 	  "                                 normally initialized (e.g. poweron). RAM images are\n"
 	  "                                 never written back to disk. If not specified, RAM is\n"
 	  "                                 initialized with random data (normal for SRAM).\n"
+	  "  -0, --rammod                   Set RAMp1 in Slot0 at power-on-reset. Mimics hardware\n"
+	  "                                 modification to allow RAM in Slot0\n"
 	  "  -h, --help                     This usage information\n\n"
 
 	  "POWER_OPTS:\n"
@@ -81,6 +83,7 @@ int main(int argc, char** argv)
 	  { "codeflash", required_argument, NULL, 'c' },
 	  { "dataflash", required_argument, NULL, 'd' },
 	  { "ram", required_argument, NULL, 'r' },
+	  { "rammod", no_argument, NULL, '0' },
 	  { "ac", no_argument, NULL,  AC },
 	  { "no-ac", no_argument, NULL, NO_AC },
 	  { "batt", no_argument, NULL, BATT },
@@ -97,13 +100,14 @@ int main(int argc, char** argv)
 	options.cf_path = strndup("codeflash.bin", 13);
 	options.df_path = strndup("dataflash.bin", 13);
 	options.ram_path = NULL;
+	options.ram_mod_por = 0;
 	options.df_save_to_disk = 1;
 	options.batt_start = BATT_HIGH;
 	options.ac_start = AC_GOOD;
 
 	/* Process arguments */
 	while ((c = getopt_long(argc, argv,
-	  "hc:d:r:n", long_opts, NULL)) != -1) {
+	  "hc:d:r:0n", long_opts, NULL)) != -1) {
 		switch(c) {
 		  case 'c':
 			options.cf_path = malloc(strlen(optarg)+1);
@@ -119,6 +123,9 @@ int main(int argc, char** argv)
 			options.ram_path = malloc(strlen(optarg)+1);
 			/* TODO: Implement error handling here */
 			strncpy(options.ram_path, optarg, strlen(optarg)+1);
+			break;
+		  case '0':
+			options.ram_mod_por = 1;
 			break;
 		  case 'n':
 			options.df_save_to_disk = 0;
