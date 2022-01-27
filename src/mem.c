@@ -1,5 +1,5 @@
 #include "debug.h"
-#include "flashops.h"
+#include "mem.h"
 #include "msemu.h"
 #include "sizes.h"
 

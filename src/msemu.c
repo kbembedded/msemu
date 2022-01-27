@@ -12,7 +12,7 @@
 #include <time.h>
 
 #include "debug.h"
-#include "flashops.h"
+#include "mem.h"
 #include "lcd.h"
 #include "msemu.h"
 #include "io.h"

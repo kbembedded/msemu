@@ -8,7 +8,7 @@ endif ()
 add_executable(msemu
 	${PLATFORM_SOURCES}
 	debug.c
-	flashops.c
+	mem.c
 	lcd.c
 	main.c
 	msemu.c
