@@ -39,7 +39,7 @@ const char* const ms_dev_map_text[] = {
 //
 //  Convert uint8_t to BCD format
 //
-unsigned char hex2bcd (unsigned char x)
+static unsigned char hex2bcd (unsigned char x)
 {
 	unsigned char y;
 	y = (x / 10) << 4;
@@ -378,11 +378,19 @@ Z80EX_BYTE z80ex_pread (
 
 	  // acknowledge power good + power button status
 	  // Also has some parport control bits
-	  /* TODO: Implement hooks here to set various power
-	   * states for testing?
-	   */
 	  case MISC9:
-		ret = (uint8_t)0xE0 | ((~ms->power_button & 1) << 4);
+		ret = 0;
+		if (ms->ac_status) ret |= MISC9_AC_GOOD;
+		if (ms->power_button_n) ret |= MISC9_PWR_BTN;
+		switch (ms->batt_status) {
+		case BATT_HIGH:
+			ret |= (MISC9_BATT_HIGH | MISC9_BATT_GOOD);
+			break;
+		case BATT_LOW:
+			ret |= MISC9_BATT_GOOD;
+			break;
+		}
+		ret = ret | (io_read(ms->io, MISC9) & 0x0F);
 		break;
 
 	  // These are all for the RTC
@@ -568,6 +576,55 @@ int process_interrupts (ms_ctx* ms)
 	return 0;
 }
 
+/* Enable, disable, or toggle AC adapter status
+ *
+ * Writes to the ms_ctx tracking variable
+ */
+void ms_power_ac_set_status(ms_ctx *ms, int status)
+{
+	if (status == AC_TOGGLE) {
+		ms->ac_status ^= AC_GOOD;
+	} else {
+		ms->ac_status = status;
+	}
+
+	switch (ms->ac_status) {
+	case AC_GOOD:
+		printf("AC good\n");
+		break;
+	case AC_FAIL:
+		printf("AC fail\n");
+		break;
+	}
+}
+
+/* Set battery voltage status, high, low, depleted
+ *
+ * Writes to the ms_ctx tracking variable
+ */
+void ms_power_batt_set_status(ms_ctx *ms, int status)
+{
+	if (status == BATT_CYCLE) {
+		ms->batt_status++;
+		if (ms->batt_status == BATT_CYCLE)
+			ms->batt_status = BATT_DEPLETE;
+	} else {
+		ms->batt_status = status;
+	}
+
+	switch (ms->batt_status) {
+	case BATT_HIGH:
+		printf("battery high\n");
+		break;
+	case BATT_LOW:
+		printf("battery low\n");
+		break;
+	case BATT_DEPLETE:
+		printf("battery depleted\n");
+		break;
+	}
+}
+
 int ms_init(ms_ctx* ms, ms_opts* options)
 {
 	/* Allocate and clear buffers.
@@ -582,13 +639,17 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	/* Seed (non-critical) RNG with time */
 	srand((unsigned int)time(NULL));
 
+	/* Initialize hardware states of the MailStation. */
 	ms->interrupt_mask = 0;
-	ms->power_button = 0;
+	ms->power_button_n = 1;
 	ms->power_state = MS_POWERSTATE_OFF;
+	ms_power_ac_set_status(ms, options->ac_start);
+	ms_power_batt_set_status(ms, options->batt_start);
 
 	/* Set up keyboard emulation array */
 	memset(ms->key_matrix, 0xff, sizeof(ms->key_matrix));
 
+	/* Create and set up Z80 machine and access funcs */
 	ms->z80 = z80ex_create(
 		z80ex_mread, (void*)ms,
 		z80ex_mwrite, (void*)ms,
@@ -597,11 +658,11 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 		z80ex_intread, (void*)ms
 	);
 
+	/* Initialize buffers for emulating the various peripherals */
 	if (lcd_init(&ms->lcd_dat1bit, &ms->lcd_datRGBA8888, &ms->lcd_cas))
 		return MS_ERR;
 	if (io_init(&ms->io)) return MS_ERR;
 	if (ram_init(&ms->ram, options)) return MS_ERR;
-
 	if (cf_init(&ms->cf, options) == ENOENT) return MS_ERR;
 
 	/* If opening a new, blank, DF buffer, then assign it a random MS

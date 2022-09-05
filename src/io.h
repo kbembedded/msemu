@@ -37,7 +37,15 @@
 #define SLOT4_DEV		0x06
 #define SLOT8_PAGE		0x07
 #define SLOT8_DEV		0x08
+
 #define MISC9			0x09 /* Printer ctrl, pwr ok, pwr btn */
+#define MISC9_AC_GOOD		(1 << 7)
+#define MISC9_BATT_HIGH		(1 << 6)
+#define MISC9_BATT_GOOD		(1 << 5)
+#define MISC9_PWR_BITS		(MISC9_AC_GOOD | MISC9_BATT_HIGH | MISC9_BATT_GOOD)
+#define MISC9_PWR_BTN		(1 << 4)
+#define MISC9_DIR		0x0A
+
 #define RTC_SEC			0x10 /* BCD, ones place seconds */
 #define RTC_10SEC		0x11 /* BCD, tens place seconds */
 #define RTC_MIN			0x12 /* BCD, ones place minutes */

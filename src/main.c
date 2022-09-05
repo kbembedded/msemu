@@ -21,19 +21,25 @@ void usage(const char *path_arg, const char *cf_path, const char *df_path)
 	  "\nMailstation Emulator\n\n"
 
 	  "Usage: \n"
-	  "  %s [-c <path] [-d <path> [-n]] [-l <path>] [-v]\n"
+	  "  %s [-c <path] [-d <path> [-n]] [-l <path>] [POWER_OPTS]\n"
 	  "  %s -h | --help\n\n"
 
-	  "Options:\n"
 	  "  -c <path>, --codeflash <path>  Path to codeflash ROM (def: %s)\n"
 	  "  -d <path>, --dataflash <path>  Path to dataflash ROM (def: %s)\n"
+	  "  -n                             Don't write dataflash/codeflash changes back to disk\n"
 	  "  -r <path>, --ram <path>        Path to RAM image. Meant for pre-loading an image\n"
 	  "                                 in to RAM. Image is set in place each time RAM is\n"
 	  "                                 normally initialized (e.g. poweron). RAM images are\n"
 	  "                                 never written back to disk. If not specified, RAM is\n"
 	  "                                 initialized with random data (normal for SRAM).\n"
-	  "  -n                             Don't write dataflash/codeflash changes back to disk\n"
 	  "  -h, --help                     This usage information\n\n"
+
+	  "POWER_OPTS:\n"
+	  "  --ac                           Start system with AC power input connected (default)\n"
+	  "  --no-ac                        Start system with AC power input removed\n"
+	  "  --batt                         Start system with Battery high level (default)\n"
+	  "  --low-batt                     Start system with Battery low level\n"
+	  "  --no-batt                      Start system with Battery depleted\n\n"
 
 	  "Debugger:\n"
 	  "  When running, press ctrl+c on the terminal window to halt exec\n"
@@ -42,6 +48,11 @@ void usage(const char *path_arg, const char *cf_path, const char *df_path)
 	  path_arg, path_arg, cf_path, df_path);
 }
 
+#define AC		1
+#define NO_AC		2
+#define BATT		3
+#define LOW_BATT	4
+#define NO_BATT		5
 int main(int argc, char** argv)
 {
 	int c;
@@ -54,6 +65,11 @@ int main(int argc, char** argv)
 	  { "codeflash", required_argument, NULL, 'c' },
 	  { "dataflash", required_argument, NULL, 'd' },
 	  { "ram", required_argument, NULL, 'r' },
+	  { "ac", no_argument, NULL,  AC },
+	  { "no-ac", no_argument, NULL, NO_AC },
+	  { "batt", no_argument, NULL, BATT },
+	  { "low-batt", no_argument, NULL, LOW_BATT },
+	  { "no-batt", no_argument, NULL, NO_BATT },
 	/* TODO: Add argument to start with debug console open, e.g. execution
 	 * halted.
 	 */
@@ -66,6 +82,8 @@ int main(int argc, char** argv)
 	options.df_path = strndup("dataflash.bin", 13);
 	options.ram_path = NULL;
 	options.df_save_to_disk = 1;
+	options.batt_start = BATT_HIGH;
+	options.ac_start = AC_GOOD;
 
 	/* Process arguments */
 	while ((c = getopt_long(argc, argv,
@@ -88,6 +106,21 @@ int main(int argc, char** argv)
 			break;
 		  case 'n':
 			options.df_save_to_disk = 0;
+			break;
+		  case AC:
+			options.ac_start = AC_GOOD;
+			break;
+		  case NO_AC:
+			options.ac_start = AC_FAIL;
+			break;
+		  case BATT:
+			options.batt_start = BATT_HIGH;
+			break;
+		  case LOW_BATT:
+			options.batt_start = BATT_LOW;
+			break;
+		  case NO_BATT:
+			options.batt_start = BATT_DEPLETE;
 			break;
 		  case 'h':
 		  default:

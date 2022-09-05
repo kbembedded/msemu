@@ -4,6 +4,7 @@
 #include "config.h"
 #include "fonts.h"
 #include "images.h"
+#include "io.h"
 #include "msemu.h"
 #include <stdio.h>
 #include <SDL2/SDL.h>
@@ -234,6 +235,16 @@ static void ui_set_ms_kbd(ms_ctx* ms, int scancode, int eventtype)
 				break;
 			}
 		}
+
+	}
+
+	/* SDLK_F12 shouldn't match anything above */
+	if (scancode == SDLK_F12) {
+		if (eventtype == SDL_KEYDOWN) {
+			ms->power_button_n = 0;
+		} else {
+			ms->power_button_n = 1;
+		}
 	}
 }
 
@@ -259,14 +270,11 @@ int ui_kbd_process(ms_ctx *ms)
 			/* First, check to see if F12 was pressed */
 			if (event.key.keysym.sym == SDLK_F12) {
 				if (event.type == SDL_KEYDOWN) {
-					ms->power_button = 1;
 					if (ms->power_state == MS_POWERSTATE_OFF) {
 						printf("POWER ON\n");
 						ms_power_on_reset(ms);
 						ui_splashscreen_hide();
 					}
-				} else {
-					ms->power_button = 0;
 				}
 			}
 
@@ -276,9 +284,13 @@ int ui_kbd_process(ms_ctx *ms)
 					switch (event.key.keysym.sym) {
 					  /* Reset whole system */
 					  case SDLK_r:
-						if (ms->power_state == MS_POWERSTATE_ON) {
-							ms_power_on_reset(ms);
-						}
+						ms_power_on_reset(ms);
+						break;
+					  case SDLK_a:
+						ms_power_ac_set_status(ms, AC_TOGGLE);
+						break;
+					  case SDLK_b:
+						ms_power_batt_set_status(ms, BATT_CYCLE);
 						break;
 					  default:
 						break;
