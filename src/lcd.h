@@ -9,16 +9,15 @@
 //
 //  Emulates writing to Mailstation LCD device
 //
-void lcd_write(uint8_t *onebit, uint32_t *RGBA8888, int *lcd_cas, uint8_t *io_buf, uint16_t newaddr, uint8_t val, int lcdnum);
+void lcd_write(ms_ctx *ms, uint16_t newaddr, uint8_t val, int lcdnum);
 
 //----------------------------------------------------------------------------
 //
 //  Emulates reading from Mailstation LCD
 //
-uint8_t lcd_read(uint8_t *onebit, uint32_t *RGBA8888, int *lcd_cas, uint8_t *io_buf, uint16_t newaddr, int lcdnum);
+uint8_t lcd_read(ms_ctx *ms, uint16_t newaddr, int lcdnum);
 
-int lcd_init(uint8_t **onebit, uint32_t **RGBA8888, int *lcd_cas);
-//uint8_t **lcd?
+int lcd_init(ms_ctx *ms);
 
 int lcd_deinit(ms_ctx *ms);
 

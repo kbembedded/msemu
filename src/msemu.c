@@ -113,7 +113,7 @@ void ms_power_on_reset(ms_ctx *ms)
 	 * set/cleared by UI functions as time goes on, clearing this for
 	 * a reset could lose keys that are being held down */
 
-	lcd_init(&ms->lcd_dat1bit, &ms->lcd_datRGBA8888, &ms->lcd_cas);
+	lcd_init(ms);
 	ram_init(&ms->ram, NULL);
 	io_init(&ms->io);
 	ms->power_state = MS_POWERSTATE_ON;
@@ -194,7 +194,7 @@ Z80EX_BYTE z80ex_mread(
 	switch (dev) {
 	  case LCD_L:
 	  case LCD_R:
-		ret = lcd_read(ms->lcd_dat1bit, ms->lcd_datRGBA8888, &ms->lcd_cas, ms->io, (addr & ~0xC000), dev);
+		ret = lcd_read(ms, (addr & ~0xC000), dev);
 		break;
 
 	  case MODEM:
@@ -286,7 +286,7 @@ void z80ex_mwrite(
 	 */
 	  case LCD_L:
 	  case LCD_R:
-		lcd_write(ms->lcd_dat1bit, ms->lcd_datRGBA8888, &ms->lcd_cas, ms->io, (addr & ~0xC000), val, dev);
+		lcd_write(ms, (addr & ~0xC000), val, dev);
 		break;
 
 	  case DF:
@@ -659,8 +659,7 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	);
 
 	/* Initialize buffers for emulating the various peripherals */
-	if (lcd_init(&ms->lcd_dat1bit, &ms->lcd_datRGBA8888, &ms->lcd_cas))
-		return MS_ERR;
+	if (lcd_init(ms)) return MS_ERR;
 	if (io_init(&ms->io)) return MS_ERR;
 	if (ram_init(&ms->ram, options)) return MS_ERR;
 	if (cf_init(&ms->cf, options) == ENOENT) return MS_ERR;
@@ -689,6 +688,7 @@ int ms_deinit(ms_ctx *ms, ms_opts *options)
 {
 	io_deinit(&ms->io);
 	ram_deinit(&ms->ram);
+	lcd_deinit(ms);
 	cf_deinit(&ms->cf, options);
 	df_deinit(&ms->df, options);
 
