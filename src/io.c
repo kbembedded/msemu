@@ -29,40 +29,40 @@
  */
 
 /* Can be called multiple times, will zero the buffer if *io_buf is not null */
-int io_init(uint8_t **io_buf)
+int io_init(ms_ctx *ms)
 {
-	if (*io_buf == NULL) {
-		*io_buf = (uint8_t *)calloc(SZ_256, sizeof(uint8_t));
-		if (*io_buf == NULL) {
+	if (ms->io == NULL) {
+		ms->io = (uint8_t *)calloc(SZ_256, sizeof(uint8_t));
+		if (ms->io == NULL) {
 			printf("Unable to allocate IO buffer\n");
 			exit(EXIT_FAILURE);
 		}
 	} else {
 		/* Buffer is already allocated, just zero it out */
-		memset(*io_buf, '\0', SZ_256);
+		memset(ms->io, '\0', SZ_256);
 	}
 
 	return MS_OK;
 }
 
-int io_deinit(uint8_t **io_buf)
+int io_deinit(ms_ctx *ms)
 {
-	assert(*io_buf != NULL);
-	free(*io_buf);
+	free(ms->io);
+	ms->io = NULL;
 
 	return MS_OK;
 }
 
-uint8_t io_read(uint8_t *io_buf, unsigned int absolute_addr)
+uint8_t io_read(ms_ctx *ms, unsigned int absolute_addr)
 {
-	assert(io_buf != NULL);
-	return *(io_buf + absolute_addr);
+	assert(ms->io != NULL);
+	return *(ms->io + absolute_addr);
 }
 
-int io_write(uint8_t *io_buf, unsigned int absolute_addr, uint8_t val)
+int io_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val)
 {
-	assert(io_buf != NULL);
-	*(io_buf + absolute_addr) = val;
+	assert(ms->io != NULL);
+	*(ms->io + absolute_addr) = val;
 
 	return MS_OK;
 }

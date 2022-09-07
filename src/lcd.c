@@ -33,7 +33,7 @@ int lcd_write(ms_ctx *ms, uint16_t newaddr, uint8_t val, int lcdnum)
 	if (newaddr >= 240) newaddr %= 240;
 
 	// Check CAS bit on P2
-	if (io_read(ms->io, MISC2) & 8) {
+	if (io_read(ms, MISC2) & 8) {
 		log_debug(" * LCD%s W [%04X] <- %02X\n",
 		  lcdnum == LCD_L ? "_L" : "_R", newaddr, val);
 
@@ -88,7 +88,7 @@ uint8_t lcd_read(ms_ctx *ms, uint16_t newaddr, int lcdnum)
 	if (newaddr >= 240) newaddr %= 240;
 
 	// Check CAS bit on P2
-	if (io_read(ms->io, MISC2) & 8)
+	if (io_read(ms, MISC2) & 8)
 	{
 		// Return data on currently selected LCD column
 		ret = lcd_ptr[newaddr + (ms->lcd_cas * 240)];

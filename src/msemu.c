@@ -115,7 +115,7 @@ void ms_power_on_reset(ms_ctx *ms)
 
 	lcd_init(ms);
 	ram_init(&ms->ram, NULL);
-	io_init(&ms->io);
+	io_init(ms);
 	ms->power_state = MS_POWERSTATE_ON;
 	ms->interrupt_mask = 0;
 	z80ex_reset(ms->z80);
@@ -170,12 +170,12 @@ Z80EX_BYTE z80ex_mread(
 		break;
 	  /* TODO: Add page range check */
 	  case 1:
-		dev = (io_read(ms->io, SLOT4_DEV) & 0x0F);
-		page = io_read(ms->io, SLOT4_PAGE);
+		dev = (io_read(ms, SLOT4_DEV) & 0x0F);
+		page = io_read(ms, SLOT4_PAGE);
 		break;
 	  case 2:
-		dev = (io_read(ms->io, SLOT8_DEV) & 0x0F);
-		page = io_read(ms->io, SLOT8_PAGE);
+		dev = (io_read(ms, SLOT8_DEV) & 0x0F);
+		page = io_read(ms, SLOT8_PAGE);
 		break;
 	  case 3:
 		dev = RAM;
@@ -262,12 +262,12 @@ void z80ex_mwrite(
 		break;
 	  /* TODO: Add page range check */
 	  case 1:
-		dev = (io_read(ms->io, SLOT4_DEV) & 0x0F);
-		page = io_read(ms->io, SLOT4_PAGE);
+		dev = (io_read(ms, SLOT4_DEV) & 0x0F);
+		page = io_read(ms, SLOT4_PAGE);
 		break;
 	  case 2:
-		dev = (io_read(ms->io, SLOT8_DEV) & 0x0F);
-		page = io_read(ms->io, SLOT8_PAGE);
+		dev = (io_read(ms, SLOT8_DEV) & 0x0F);
+		page = io_read(ms, SLOT8_PAGE);
 		break;
 	  case 3:
 		dev = RAM;
@@ -352,13 +352,13 @@ Z80EX_BYTE z80ex_pread (
 		rtc_time = localtime(&theTime);
 	}
 
-	log_debug(" * IO    R [  %02X] -> %02X\n", port, io_read(ms->io, port));
+	log_debug(" * IO    R [  %02X] -> %02X\n", port, io_read(ms, port));
 
 	switch (port) {
 	  case KEYBOARD:// emulate keyboard matrix output
 		// keyboard row is 10 bits wide, P1.x = low bits, P2.0-1 = high bits
 		/* XXX: This is REAL clunky */
-		kbaddr = (io_read(ms->io, KEYBOARD)) + (((io_read(ms->io, MISC2)) & 3) << 8);
+		kbaddr = (io_read(ms, KEYBOARD)) + (((io_read(ms, MISC2)) & 3) << 8);
 
 		// all returned bits should be high unless a key is pressed
 		kbresult = 0xFF;
@@ -390,7 +390,7 @@ Z80EX_BYTE z80ex_pread (
 			ret |= MISC9_BATT_GOOD;
 			break;
 		}
-		ret = ret | (io_read(ms->io, MISC9) & 0x0F);
+		ret = ret | (io_read(ms, MISC9) & 0x0F);
 		break;
 
 	  // These are all for the RTC
@@ -435,7 +435,7 @@ Z80EX_BYTE z80ex_pread (
 		break;
 
 	  default:
-		ret = io_read(ms->io, port);
+		ret = io_read(ms, port);
 		break;
 	}
 
@@ -473,13 +473,13 @@ void z80ex_pwrite (
 	switch (port) {
 	  case MISC2:
 		ui_update_led(!!(val & MISC2_LED_BIT));
-		io_write(ms->io, port, val);
+		io_write(ms, port, val);
 		break;
 
 	  // set interrupt masks
 	  case IRQ_MASK:
 		ms->interrupt_mask &= val;
-		io_write(ms->io, port, val);
+		io_write(ms, port, val);
 		break;
 
 	  // check for hardware power off bit in P28
@@ -488,12 +488,12 @@ void z80ex_pwrite (
 			printf("POWER OFF\n");
 			ms_power_off(ms);
 		}
-		io_write(ms->io, port, val);
+		io_write(ms, port, val);
 		break;
 
 	  // otherwise just save written value
 	  default:
-		io_write(ms->io, port, val);
+		io_write(ms, port, val);
 		break;
 	}
 }
@@ -551,7 +551,7 @@ int process_interrupts (ms_ctx* ms)
 		icount = 0;
 
 		// do time16 interrupt
-		if ((io_read(ms->io, IRQ_MASK) & 0x10) && !(ms->interrupt_mask & 0x10))
+		if ((io_read(ms, IRQ_MASK) & 0x10) && !(ms->interrupt_mask & 0x10))
 		{
 			ms->interrupt_mask |= 0x10;
 			return z80ex_int(ms->z80);
@@ -559,7 +559,7 @@ int process_interrupts (ms_ctx* ms)
 	}
 
 	// Trigger keyboard interrupt if necessary (64hz)
-	if ((io_read(ms->io, IRQ_MASK) & 2) && !(ms->interrupt_mask & 2))
+	if ((io_read(ms, IRQ_MASK) & 2) && !(ms->interrupt_mask & 2))
 	{
 		ms->interrupt_mask |= 2;
 		return z80ex_int(ms->z80);
@@ -660,7 +660,7 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 
 	/* Initialize buffers for emulating the various peripherals */
 	if (lcd_init(ms)) return MS_ERR;
-	if (io_init(&ms->io)) return MS_ERR;
+	if (io_init(ms)) return MS_ERR;
 	if (ram_init(&ms->ram, options)) return MS_ERR;
 	if (cf_init(&ms->cf, options) == ENOENT) return MS_ERR;
 
@@ -686,7 +686,7 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 
 int ms_deinit(ms_ctx *ms, ms_opts *options)
 {
-	io_deinit(&ms->io);
+	io_deinit(ms);
 	ram_deinit(&ms->ram);
 	lcd_deinit(ms);
 	cf_deinit(&ms->cf, options);
