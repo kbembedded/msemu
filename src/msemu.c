@@ -21,7 +21,10 @@
 
 #include <SDL2/SDL.h>
 #include <errno.h>
+#include <signal.h>
 #include <stdlib.h>
+#include <sys/time.h>
+#include <unistd.h>
 #include <z80ex/z80ex.h>
 #include <z80ex/z80ex_dasm.h>
 
@@ -705,13 +708,19 @@ int ms_run(ms_ctx* ms)
 	// TODO: Consider removing dependency on SDL here and having
 	//     hooks for the UI code to attach to instead.
 
-	int execute_counter = 0;
 	int tstate_counter = 0;
 	/* XXX: interrupt_period can change if running at different freq */
+        // The interrupt period below is (12 MHz / 64) T states per INT
 	int interrupt_period = 187500;
 	int exitemu = 0;
-	uint32_t lasttick = SDL_GetTicks();
-	uint32_t currenttick;
+
+	/* The goal of this high accuracy counter is to be able to sleep when
+	 * there is a HALT instruction until the next 64 Hz interrupt tick.
+	 * If there is no HALT e.g. the CPU is doing a LOT of processing,
+	 * then the clock_nanosleep() call will immediately return.
+	 * This leaves the main Z80 execution loop counting T states between
+	 * INTs which should match roughly to the same rate of 64 Hz */
+	struct timespec int_interval;
 
 	/* NOTE:
 	 * The z80ex library can hook in to RETI opcodes. Allowing us to exec
@@ -722,17 +731,26 @@ int ms_run(ms_ctx* ms)
 	// Display startup message
 	ms_power_off(ms);
 
-	lasttick = SDL_GetTicks();
+	/* Set up our current time */
+	clock_gettime(CLOCK_MONOTONIC, &int_interval);
 
 	while (!exitemu)
 	{
+		/* This interval is 64 Hz
+		 * Since we only ever add the interrupt interval repeatedly
+		 * to the next interval, this should keep the overall skew of
+		 * the interrupt time to a minimum.
+		 * XXX: Need to test this more!
+		 */
+		int_interval.tv_nsec += 15625000;
+		if (int_interval.tv_nsec > 999999999) {
+			int_interval.tv_sec++;
+			int_interval.tv_nsec -= 999999999;
+		}
+
 		if (debug_isbreak()) {
 			if (debug_prompt() == -1) break;
 		}
-
-		/* XXX: Can replace with SDL_TICKS_PASSED with new
-		 * SDL version. */
-		currenttick = SDL_GetTicks();
 
 		/* Let the Z80 process code in chunks of time to better match
 		 * real time Mailstation behavior.
@@ -757,29 +775,30 @@ int ms_run(ms_ctx* ms)
 		 * cause this loop to exit after the next instruction. Pressing
 		 * esc on the SDL window will only process after this loop has
 		 * completed.*/
+
+		/* Execute number of interrupt period instructions */
+		/* While we might not hit an interrupt on every tick, it should
+		 * average out */
+		tstate_counter = 0;
+
 		if (ms->power_state == MS_POWERSTATE_ON) {
-			execute_counter += currenttick - lasttick;
-			if (execute_counter > 15 || debug_isbreak()) {
-				if (execute_counter > 15) execute_counter = 0;
+			while (tstate_counter < interrupt_period) {
+				debug_dasm();
 
-				while (tstate_counter < interrupt_period) {
-					debug_dasm();
-					do {
-						tstate_counter += z80ex_step(ms->z80);
-					} while (z80ex_last_op_type(ms->z80));
+				/* Ensure we do one complete instruction,
+				 * even if it is a multi-opcode instr */
+				do {
+					tstate_counter += z80ex_step(ms->z80);
+				} while (z80ex_last_op_type(ms->z80));
 
-					if (debug_testbp(bpPC,
-					  z80ex_get_reg(ms->z80, regPC))) {
-						break;
-					}
+				if (debug_testbp(bpPC,
+				  z80ex_get_reg(ms->z80, regPC))) {
+					break;
+				}
+				if (z80ex_doing_halt(ms->z80)) {
+					break;
 				}
 			}
-
-			if (tstate_counter >= interrupt_period) {
-				tstate_counter += process_interrupts(ms);
-				tstate_counter %= interrupt_period;
-			}
-
 		}
 
 		ui_update_lcd();
@@ -788,8 +807,15 @@ int ms_run(ms_ctx* ms)
 
 		ui_render();
 
-		// Update SDL ticks
-		lasttick = currenttick;
+                /* Sleep until next timer tick @ 64 Hz. Only sleep the
+                 * until the specified absolute time. Immediately returns if
+		 * that absolute time has already passed.
+		 */
+		/* XXX: Need to better understand CPU's timers and set up
+		 * correct adjustment of sleep time!
+		 */
+		clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &int_interval, NULL);
+		process_interrupts(ms);
 	}
 
 	return MS_OK;
