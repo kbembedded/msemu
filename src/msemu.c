@@ -339,7 +339,6 @@ Z80EX_BYTE z80ex_pread (
 
 	uint16_t kbaddr;
 	uint8_t kbresult;
-	uint8_t tmp;
 	int i;
 
 	Z80EX_BYTE ret = 0;
@@ -462,7 +461,7 @@ void z80ex_pwrite (
 	Z80EX_BYTE val,
 	void *user_data)
 {
-	uint8_t tmp;
+
 	ms_ctx* ms = (ms_ctx*)user_data;
 
 
@@ -591,14 +590,7 @@ void ms_power_ac_set_status(ms_ctx *ms, int status)
 		ms->ac_status = status;
 	}
 
-	switch (ms->ac_status) {
-	case AC_GOOD:
-		printf("AC good\n");
-		break;
-	case AC_FAIL:
-		printf("AC fail\n");
-		break;
-	}
+	ui_update_ac(ms->ac_status);
 }
 
 /* Set battery voltage status, high, low, depleted

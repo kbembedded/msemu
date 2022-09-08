@@ -40,6 +40,13 @@ SDL_Texture* led_tex = NULL;
 SDL_Rect led_srcRect = {0, 0 , UI_LED_IMAGE_SIZE, UI_LED_IMAGE_SIZE};
 SDL_Rect led_dstRect = {LOGICAL_WIDTH - 48, LOGICAL_HEIGHT - 96, UI_LED_IMAGE_SIZE, UI_LED_IMAGE_SIZE};
 
+// AC
+#define UI_AC_IMAGE_SIZE 32
+SDL_Surface* ac_surface = NULL;
+SDL_Texture* ac_tex = NULL;
+SDL_Rect ac_srcRect = {0, 0 , UI_AC_IMAGE_SIZE, UI_AC_IMAGE_SIZE};
+SDL_Rect ac_dstRect = {LOGICAL_WIDTH - 80, 72, UI_AC_IMAGE_SIZE, UI_AC_IMAGE_SIZE};
+
 // Battery
 #define UI_BATTERY_IMAGE_SIZE 32
 SDL_Surface* battery_surface = NULL;
@@ -159,6 +166,24 @@ void ui_init(uint32_t* ms_lcd_buffer)
 		printf("Error creating LED texture: %s\n", SDL_GetError());
 	}
 
+	/* Prepare the MailStation AC surface */
+	stream = SDL_RWFromConstMem(ac_png, ac_png_size);
+	if (!stream) {
+		printf("Error creating AC stream: %s\n", SDL_GetError());
+		abort();
+	}
+
+	ac_surface = IMG_LoadPNG_RW(stream);
+	if (!ac_surface) {
+		printf("Error creating AC surface: %s\n", SDL_GetError());
+		abort();
+	}
+
+	ac_tex = SDL_CreateTextureFromSurface(renderer, ac_surface);
+	if (!ac_tex) {
+		printf("Error creating AC texture: %s\n", SDL_GetError());
+	}
+
 	/* Prepare the MailStation Battery surface */
 	stream = SDL_RWFromConstMem(battery_png, battery_png_size);
 	if (!stream) {
@@ -195,6 +220,10 @@ void ui_update_led(uint8_t on)
 	led_srcRect.x = UI_LED_IMAGE_SIZE * on;
 }
 
+void ui_update_ac(uint8_t on){
+	ac_srcRect.x = UI_AC_IMAGE_SIZE * on;
+}
+
 void ui_update_battery(int status)
 {
 	battery_srcRect.x = UI_BATTERY_IMAGE_SIZE * status;
@@ -221,6 +250,11 @@ void ui_render()
 		SDL_RenderCopy(
 			renderer, led_tex,
 			&led_srcRect, &led_dstRect);
+
+		// Render AC
+		SDL_RenderCopy(
+			renderer, ac_tex,
+			&ac_srcRect, &ac_dstRect);
 
 		// Render Battery
 		SDL_RenderCopy(

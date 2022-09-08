@@ -42,6 +42,11 @@ void ui_splashscreen_hide();
 void ui_update_led(uint8_t on);
 
 /**
+ * Set AC status indicator.
+ */
+void ui_update_ac(uint8_t on);
+
+/**
  * Set battery status indicator.
  */
 void ui_update_battery(int status);
