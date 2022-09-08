@@ -41,14 +41,6 @@ int ram_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val);
  * Return a byte from the Mailstation dataflash buffer. This does not
  * require any special command structure unlike the write path.
  *
- * *ms		 - Pointer to ms_ctx struct
- * absolute_addr - Address in range of flash:
- *                 Dataflash 0x00000:0x7FFFF
- *                 Codeflash 0x00000:0xFFFFF
- *                 RAM       0x00000:0x20000
- */
-uint8_t df_read(ms_ctx *ms, unsigned int absolute_addr);
-uint8_t cf_read(ms_ctx *ms, unsigned int absolute_addr);
 uint8_t ram_read(ms_ctx *ms, unsigned int absolute_addr);
 
 
