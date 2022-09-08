@@ -43,6 +43,7 @@ typedef struct ms_ctx {
 	uint8_t *df;
 	uint8_t *cf;
 	uint8_t *ram;
+	uint8_t *ram_image;
 
 	uint32_t *lcd_datRGBA8888;
 	uint8_t *lcd_dat1bit;

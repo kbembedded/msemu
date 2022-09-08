@@ -59,9 +59,10 @@ static unsigned char hex2bcd (unsigned char x)
  * not seem to be enforced in Mailstation firmware. Nevertheless, the last char
  * is set to a '-'
  */
-static void ms_set_df_rnd_serial(uint8_t *df_buf)
+static void ms_set_df_rnd_serial(ms_ctx *ms)
 {
 	int i;
+	uint8_t *df_buf = ms->df;
 	uint8_t rnd;
 
 	df_buf += DF_SN_OFFS;
@@ -87,9 +88,10 @@ static void ms_set_df_rnd_serial(uint8_t *df_buf)
  * In all observed Mailstations, the last character is '-', but it does
  * not seem to be enforced in Mailstation firmware; it is not enforced here
  */
-static int ms_serial_valid(uint8_t *df_buf)
+static int ms_serial_valid(ms_ctx *ms)
 {
 	int i;
+	uint8_t *df_buf = ms->df;
 	int ret = MS_OK;
 
 	df_buf += DF_SN_OFFS;
@@ -114,7 +116,7 @@ void ms_power_on_reset(ms_ctx *ms)
 	 * a reset could lose keys that are being held down */
 
 	lcd_init(ms);
-	ram_init(&ms->ram, NULL);
+	ram_init(ms, NULL);
 	io_init(ms);
 	ms->power_state = MS_POWERSTATE_ON;
 	ms->interrupt_mask = 0;
@@ -203,15 +205,15 @@ Z80EX_BYTE z80ex_mread(
 		break;
 
 	  case CF:
-		ret = cf_read(ms->cf, ((addr & ~0xC000) + (0x4000 * page)));
+		ret = cf_read(ms, ((addr & ~0xC000) + (0x4000 * page)));
 		break;
 
 	  case DF:
-		ret = df_read(ms->df, ((addr & ~0xC000) + (0x4000 * page)));
+		ret = df_read(ms, ((addr & ~0xC000) + (0x4000 * page)));
 		break;
 
 	  case RAM:
-		ret = ram_read(ms->ram, ((addr & ~0xC000) + (0x4000 * page)));
+		ret = ram_read(ms, ((addr & ~0xC000) + (0x4000 * page)));
 		log_debug(" * MEM   R [%04X] -> %02X\n", addr, ret);
 		break;
 
@@ -290,7 +292,7 @@ void z80ex_mwrite(
 		break;
 
 	  case DF:
-		df_write(ms->df, ((addr & ~0xC000) + (0x4000 * page)), val);
+		df_write(ms, ((addr & ~0xC000) + (0x4000 * page)), val);
 		break;
 
 	  case MODEM:
@@ -298,7 +300,7 @@ void z80ex_mwrite(
 		break;
 
 	  case RAM:
-		ram_write(ms->ram, ((addr & ~0xC000) + (0x4000 * page)), val);
+		ram_write(ms, ((addr & ~0xC000) + (0x4000 * page)), val);
 		log_debug(" * MEM   W [%04X] <- %02X\n", addr, val);
 		break;
 
@@ -661,17 +663,17 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	/* Initialize buffers for emulating the various peripherals */
 	if (lcd_init(ms)) return MS_ERR;
 	if (io_init(ms)) return MS_ERR;
-	if (ram_init(&ms->ram, options)) return MS_ERR;
-	if (cf_init(&ms->cf, options) == ENOENT) return MS_ERR;
+	if (ram_init(ms, options)) return MS_ERR;
+	if (cf_init(ms, options) == ENOENT) return MS_ERR;
 
 	/* If opening a new, blank, DF buffer, then assign it a random MS
 	 * compatible serial number.
 	 * If the DF file opened has an invalid serial number, just complain
 	 * loudly with a warning. */
-	if (df_init(&ms->df, options) == ENOENT) {
-		ms_set_df_rnd_serial(ms->df);
+	if (df_init(ms, options) == ENOENT) {
+		ms_set_df_rnd_serial(ms);
 	}
-	if (ms_serial_valid(ms->df)) {
+	if (ms_serial_valid(ms)) {
 		printf("WARNING! Dataflash does not have valid serial num!\n");
 		printf("This may not be a dataflash image!\n\n");
 	}
@@ -687,10 +689,10 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 int ms_deinit(ms_ctx *ms, ms_opts *options)
 {
 	io_deinit(ms);
-	ram_deinit(&ms->ram);
+	ram_deinit(ms);
 	lcd_deinit(ms);
-	cf_deinit(&ms->cf, options);
-	df_deinit(&ms->df, options);
+	cf_deinit(ms, options);
+	df_deinit(ms, options);
 
 	return 0;
 }
