@@ -615,17 +615,7 @@ void ms_power_batt_set_status(ms_ctx *ms, int status)
 		ms->batt_status = status;
 	}
 
-	switch (ms->batt_status) {
-	case BATT_HIGH:
-		printf("battery high\n");
-		break;
-	case BATT_LOW:
-		printf("battery low\n");
-		break;
-	case BATT_DEPLETE:
-		printf("battery depleted\n");
-		break;
-	}
+	ui_update_battery(ms->batt_status);
 }
 
 int ms_init(ms_ctx* ms, ms_opts* options)

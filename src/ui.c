@@ -40,6 +40,13 @@ SDL_Texture* led_tex = NULL;
 SDL_Rect led_srcRect = {0, 0 , UI_LED_IMAGE_SIZE, UI_LED_IMAGE_SIZE};
 SDL_Rect led_dstRect = {LOGICAL_WIDTH - 48, LOGICAL_HEIGHT - 96, UI_LED_IMAGE_SIZE, UI_LED_IMAGE_SIZE};
 
+// Battery
+#define UI_BATTERY_IMAGE_SIZE 32
+SDL_Surface* battery_surface = NULL;
+SDL_Texture* battery_tex = NULL;
+SDL_Rect battery_srcRect = {0, 0 , UI_BATTERY_IMAGE_SIZE, UI_BATTERY_IMAGE_SIZE};
+SDL_Rect battery_dstRect = {LOGICAL_WIDTH - 48, 72, UI_BATTERY_IMAGE_SIZE, UI_BATTERY_IMAGE_SIZE};
+
 // Keyboard
 // This table translates PC scancodes to the Mailstation key matrix
 static int32_t sdl_to_ms_kbd_LUT[10][8] = {
@@ -151,6 +158,24 @@ void ui_init(uint32_t* ms_lcd_buffer)
 	if (!led_tex) {
 		printf("Error creating LED texture: %s\n", SDL_GetError());
 	}
+
+	/* Prepare the MailStation Battery surface */
+	stream = SDL_RWFromConstMem(battery_png, battery_png_size);
+	if (!stream) {
+		printf("Error creating Battery stream: %s\n", SDL_GetError());
+		abort();
+	}
+
+	battery_surface = IMG_LoadPNG_RW(stream);
+	if (!battery_surface) {
+		printf("Error creating Battery surface: %s\n", SDL_GetError());
+		abort();
+	}
+
+	battery_tex = SDL_CreateTextureFromSurface(renderer, battery_surface);
+	if (!battery_tex) {
+		printf("Error creating Battery texture: %s\n", SDL_GetError());
+	}
 }
 
 void ui_splashscreen_show()
@@ -168,6 +193,11 @@ void ui_splashscreen_hide()
 void ui_update_led(uint8_t on)
 {
 	led_srcRect.x = UI_LED_IMAGE_SIZE * on;
+}
+
+void ui_update_battery(int status)
+{
+	battery_srcRect.x = UI_BATTERY_IMAGE_SIZE * status;
 }
 
 void ui_update_lcd()
@@ -191,6 +221,11 @@ void ui_render()
 		SDL_RenderCopy(
 			renderer, led_tex,
 			&led_srcRect, &led_dstRect);
+
+		// Render Battery
+		SDL_RenderCopy(
+			renderer, battery_tex,
+			&battery_srcRect, &battery_dstRect);
 	}
 
 	// We're rendering back to front, so we always check
