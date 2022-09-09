@@ -174,6 +174,15 @@ Z80EX_BYTE z80ex_mread(
 	void *user_data)
 {
 
+	/* XXX: We spend a lot of time in this function. There may be a number
+	 * of ways of speeding this up. Currently each call has to calculate
+	 * absolute address based on page etc for CF. Additioally, each
+	 * call re-calculates dev and page. These could be optimized in
+	 * pwrite to calculate dev, page, and absoluate address offset
+	 * each time the page changes rather than on each call.
+	 * Additionally, debug testbp takes a lot of time too. Not sure how to
+	 * speed up/reduce those calls at the moment though...
+	 */
 	Z80EX_BYTE ret;
 	ms_ctx* ms = (ms_ctx*)user_data;
 	int slot = ((addr & 0xC000) >> 14);
