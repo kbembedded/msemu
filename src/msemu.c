@@ -185,7 +185,6 @@ Z80EX_BYTE z80ex_mread(
 	 */
 	Z80EX_BYTE ret;
 	ms_ctx* ms = (ms_ctx*)user_data;
-	int slot = ((addr & 0xC000) >> 14);
 	int dev, page;
 
 	debug_testbp(bpMR, addr);
@@ -200,21 +199,21 @@ Z80EX_BYTE z80ex_mread(
 	 * 4 bits set, this can screw up our logic here. The reason for the
 	 * bits being set is unknown at this time.
 	 */
-	switch (slot) {
-	  case 0:
+	switch (addr & 0xC000) {
+	  case 0x0000: // SLOT0
 		dev = CF;
 		page = 0;
 		break;
 	  /* TODO: Add page range check */
-	  case 1:
-		dev = (io_read(ms, SLOT4_DEV) & 0x0F);
-		page = io_read(ms, SLOT4_PAGE);
+	  case 0x4000: // SLOT4
+		dev = ms->slot4_dev;
+		page = ms->slot4_page_offs;
 		break;
-	  case 2:
-		dev = (io_read(ms, SLOT8_DEV) & 0x0F);
-		page = io_read(ms, SLOT8_PAGE);
+	  case 0x8000: // SLOT8
+		dev = ms->slot8_dev;
+		page = ms->slot8_page_offs;
 		break;
-	  case 3:
+	  case 0xC000: // SLOTC
 		dev = RAM;
 		page = 0;
 		break;
@@ -231,7 +230,7 @@ Z80EX_BYTE z80ex_mread(
 	switch (dev) {
 	  case LCD_L:
 	  case LCD_R:
-		ret = lcd_read(ms, (addr & ~0xC000), dev);
+		ret = lcd_read(ms, (addr & 0x3FFF), dev);
 		break;
 
 	  case MODEM:
@@ -240,15 +239,15 @@ Z80EX_BYTE z80ex_mread(
 		break;
 
 	  case CF:
-		ret = cf_read(ms, ((addr & ~0xC000) + (0x4000 * page)));
+		ret = cf_read(ms, ((addr & 0x3FFF) + (page)));
 		break;
 
 	  case DF:
-		ret = df_read(ms, ((addr & ~0xC000) + (0x4000 * page)));
+		ret = df_read(ms, ((addr & 0x3FFF) + (page)));
 		break;
 
 	  case RAM:
-		ret = ram_read(ms, ((addr & ~0xC000) + (0x4000 * page)));
+		ret = ram_read(ms, ((addr & 0x3FFF) + (page)));
 		log_debug(" * MEM   R [%04X] -> %02X\n", addr, ret);
 		break;
 
@@ -523,6 +522,26 @@ void z80ex_pwrite (
 	  case UNKNOWN0x28:
 		if (val & 1) ms_power_off(ms);
 		io_write(ms, port, val);
+		break;
+
+	  // Optimizations for mread by calculating dev/page at IO write
+	  case SLOT4_DEV:
+		ms->slot4_dev = val & 0xF;
+		ms->slot4_page_offs = (io_read(ms->io, SLOT4_PAGE) * 0x4000);
+		io_write(ms->io, port, val);
+		break;
+	  case SLOT4_PAGE:
+		ms->slot4_page_offs = (val * 0x4000);
+		io_write(ms->io, port, val);
+		break;
+	  case SLOT8_DEV:
+		ms->slot8_dev = val & 0xF;
+		ms->slot8_page_offs = (io_read(ms->io, SLOT8_PAGE) * 0x4000);
+		io_write(ms->io, port, val);
+		break;
+	  case SLOT8_PAGE:
+		ms->slot8_page_offs = (val * 0x4000);
+		io_write(ms->io, port, val);
 		break;
 
 	  // otherwise just save written value

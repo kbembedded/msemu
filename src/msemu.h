@@ -61,6 +61,7 @@ typedef struct ms_ctx {
 	// XXX: I think this can go away?
 	uint8_t power_state;
 
+<<<<<<< HEAD
 	/* Inputs to the CPU IO that are generated in hardware and wired to
 	 * IO ports. These need to be maintained in the context of the machine
 	 * rather than the IO port itself since the MailStation firmware could
@@ -82,6 +83,19 @@ typedef struct ms_ctx {
 	 * returned in P9.4
 	 */
 	int power_button_n;
+
+	//Store the current device and page offset for each slot.
+	/* This is used to save the current offset for each slot once the
+	 * respective IO port is written. Reduces need to calculate the base
+	 * offset on every mem access.
+	 *
+	 * NOTE! This didn't have as much of an impact as I'd hoped. Might not
+	 * be worth maintaining this.
+	 */
+	int slot4_dev;
+	int slot4_page_offs;
+	int slot8_dev;
+	int slot8_page_offs;
 } ms_ctx;
 
 typedef struct ms_opts {
