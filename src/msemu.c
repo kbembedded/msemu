@@ -187,7 +187,7 @@ Z80EX_BYTE z80ex_mread(
 	ms_ctx* ms = (ms_ctx*)user_data;
 	int dev, page;
 
-	debug_testbp(bpMR, addr);
+	//debug_testbp(bpMR, addr);
 
 	/* slot4 and slot8 are dynamic, if the requested address falls
 	 * in this range, then we need to set up the device we're going
@@ -235,7 +235,7 @@ Z80EX_BYTE z80ex_mread(
 
 	  case MODEM:
 		ret = 0;
-		log_debug(" * MODEM R is not supported\n");
+		//log_debug(" * MODEM R is not supported\n");
 		break;
 
 	  case CF:
@@ -248,12 +248,12 @@ Z80EX_BYTE z80ex_mread(
 
 	  case RAM:
 		ret = ram_read(ms, ((addr & 0x3FFF) + (page)));
-		log_debug(" * MEM   R [%04X] -> %02X\n", addr, ret);
+		//log_debug(" * MEM   R [%04X] -> %02X\n", addr, ret);
 		break;
 
 	  default:
-		log_error(" * MEM   R [%04X] FROM INVALID DEV %02X @ %04X\n",
-		  addr, dev, z80ex_get_reg(ms->z80, regPC));
+		//log_error(" * MEM   R [%04X] FROM INVALID DEV %02X @ %04X\n",
+		//  addr, dev, z80ex_get_reg(ms->z80, regPC));
 		ret = 0;
 		break;
 	}
@@ -279,7 +279,7 @@ void z80ex_mwrite(
 	int slot = ((addr & 0xC000) >> 14);
 	int dev = 0xFF, page = 0xFF;
 
-	debug_testbp(bpMW, addr);
+	//debug_testbp(bpMW, addr);
 
 	/* slot4 and slot8 are dynamic, if the requested address falls
 	 * in this range, then we need to set up the device we're going
@@ -330,22 +330,22 @@ void z80ex_mwrite(
 		break;
 
 	  case MODEM:
-		log_debug(" * MODEM W is not supported\n");
+		//log_debug(" * MODEM W is not supported\n");
 		break;
 
 	  case RAM:
 		ram_write(ms, ((addr & ~0xC000) + (0x4000 * page)), val);
-		log_debug(" * MEM   W [%04X] <- %02X\n", addr, val);
+		//log_debug(" * MEM   W [%04X] <- %02X\n", addr, val);
 		break;
 
 	  case CF:
-		log_error(" * CF    W [%04X] INVALID, CANNOT W TO CF @ %04X\n",
-		  addr, z80ex_get_reg(ms->z80, regPC));
+		//log_error(" * CF    W [%04X] INVALID, CANNOT W TO CF @ %04X\n",
+		//  addr, z80ex_get_reg(ms->z80, regPC));
 		break;
 
 	  default:
-		log_error(" * MEM   W [%04X] TO INVALID DEV %02X\n @ %04X",
-		  addr, dev), z80ex_get_reg(ms->z80, regPC);
+		//log_error(" * MEM   W [%04X] TO INVALID DEV %02X\n @ %04X",
+		//  addr, dev), z80ex_get_reg(ms->z80, regPC);
 		break;
 	}
 }
@@ -388,7 +388,7 @@ Z80EX_BYTE z80ex_pread (
 		rtc_time = localtime(&theTime);
 	}
 
-	log_debug(" * IO    R [  %02X] -> %02X\n", port, io_read(ms, port));
+	//log_debug(" * IO    R [  %02X] -> %02X\n", port, io_read(ms, port));
 
 	switch (port) {
 	  case KEYBOARD:// emulate keyboard matrix output
@@ -504,7 +504,7 @@ void z80ex_pwrite (
 	 * be evaluated for the port number */
 	port &= 0xFF;
 
-	log_debug(" * IO    W [  %02X] <- %02X\n", port, val);
+	//log_debug(" * IO    W [  %02X] <- %02X\n", port, val);
 
 	switch (port) {
 	  case MISC2:
@@ -776,9 +776,11 @@ int ms_run(ms_ctx* ms)
 			int_interval.tv_nsec -= 999999999;
 		}
 
+#if 0
 		if (debug_isbreak()) {
 			if (debug_prompt() == -1) break;
 		}
+#endif
 
 		/* Let the Z80 process code in chunks of time to better match
 		 * real time Mailstation behavior.
@@ -811,7 +813,7 @@ int ms_run(ms_ctx* ms)
 
 		if (ms->power_state == MS_POWERSTATE_ON) {
 			while (tstate_counter < interrupt_period) {
-				debug_dasm();
+				//debug_dasm();
 
 				/* Ensure we do one complete instruction,
 				 * even if it is a multi-opcode instr */
@@ -819,10 +821,12 @@ int ms_run(ms_ctx* ms)
 					tstate_counter += z80ex_step(ms->z80);
 				} while (z80ex_last_op_type(ms->z80));
 
+#if 0
 				if (debug_testbp(bpPC,
 				  z80ex_get_reg(ms->z80, regPC))) {
 					break;
 				}
+#endif
 				if (z80ex_doing_halt(ms->z80)) {
 					break;
 				}
