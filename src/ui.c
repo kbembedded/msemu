@@ -21,11 +21,17 @@ SDL_RWops* stream = NULL;
 // Splashscreen
 SDL_Surface* splashscreen_surface = NULL;
 SDL_Texture* splashscreen_tex = NULL;
-SDL_Rect splashscreen_srcRect = { 0, 0, 0, 0 };
-SDL_Rect splashscreen_dstRect = { 0, 0, 0, 0 };
-TTF_Font* font = NULL;
-SDL_Color font_color = { 0xff, 0xff, 0x00 }; /* Yellow */
+SDL_Rect splashscreen_srcRect = { 0, 0, 320, 128 };
+SDL_Rect splashscreen_dstRect = { 0, 112, LOGICAL_WIDTH, 256 };
 int splashscreen_show = 0;
+
+// Version
+SDL_Surface* version_surface = NULL;
+SDL_Texture* version_tex = NULL;
+SDL_Rect version_srcRect = { 0, 0, 72, 24 };
+SDL_Rect version_dstRect = { LOGICAL_WIDTH - 80, LOGICAL_HEIGHT - 142, 72, 24 };
+TTF_Font* font = NULL;
+SDL_Color font_color = { 0x9d, 0xe0, 0x8c };
 
 // LCD
 SDL_Surface* lcd_surface = NULL;
@@ -90,7 +96,7 @@ void ui_init(uint32_t* ms_lcd_buffer)
 
 	/* Create/configure window & renderer */
 	window = SDL_CreateWindow(
-		"MailStation Emulator",
+		"MailStation EMUlator",
 		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
 		LOGICAL_WIDTH, LOGICAL_HEIGHT, SDL_WINDOW_RESIZABLE);
 
@@ -102,7 +108,26 @@ void ui_init(uint32_t* ms_lcd_buffer)
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 	SDL_RenderSetLogicalSize(renderer, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
-	/* Load font */
+	/* Prepare the Splashscreen surface */
+	stream = SDL_RWFromConstMem(splash_png, splash_png_size);
+	if (!stream) {
+		printf("Error creating Splashscreen stream: %s\n", SDL_GetError());
+		abort();
+	}
+
+	splashscreen_surface = IMG_LoadPNG_RW(stream);
+	if (!splashscreen_surface) {
+		printf("Error creating Splashscreen surface: %s\n", SDL_GetError());
+		abort();
+	}
+
+	splashscreen_tex = SDL_CreateTextureFromSurface(renderer, splashscreen_surface);
+		if (!splashscreen_tex) {
+		printf("Error creating Splashscreen texture: %s\n", SDL_GetError());
+		abort();
+	}
+
+	/* Prepare the Version surface */
 	stream = SDL_RWFromConstMem(kongtext_ttf, kongtext_ttf_size);
 	if (!stream) {
 		printf("Error creating font stream: %s\n", SDL_GetError());
@@ -115,28 +140,21 @@ void ui_init(uint32_t* ms_lcd_buffer)
 		abort();
 	}
 
-	/* Prepare the splashscreen surface */
-	splashscreen_surface = TTF_RenderText_Blended_Wrapped(
-		font, SPLASH_STR \
-			"F12 to Start", font_color, LOGICAL_WIDTH);
-	if (!splashscreen_surface) {
-		printf("Error creating splashscreen surface: %s\n", TTF_GetError());
+	version_surface = TTF_RenderText_Blended_Wrapped(
+		font, VERSION_STR, font_color, LOGICAL_WIDTH);
+	if (!version_surface) {
+		printf("Error creating Version surface: %s\n", TTF_GetError());
 		abort();
 	}
 
-	splashscreen_tex = SDL_CreateTextureFromSurface(renderer, splashscreen_surface);
-	if (!splashscreen_tex) {
-		printf("Error creating splashscreen texture: %s\n", SDL_GetError());
+	version_tex = SDL_CreateTextureFromSurface(renderer, version_surface);
+	if (!version_tex) {
+		printf("Error creating Version texture: %s\n", SDL_GetError());
 		abort();
 	}
-
-	splashscreen_srcRect.w = splashscreen_surface->w;
-	splashscreen_srcRect.h = splashscreen_surface->h;
-	splashscreen_dstRect.w = splashscreen_surface->w;
-	splashscreen_dstRect.h = splashscreen_surface->h;
 
 	/* Prepare the MailStation LCD surface */
-	lcd_surface = SDL_CreateRGBSurfaceFrom(ms_lcd_buffer, 320, 240, 32, 1280, 0,0,0,0);
+	lcd_surface = SDL_CreateRGBSurfaceFrom(ms_lcd_buffer, 320, 240, 32, 1280, 0, 0, 0, 0);
 	if (!lcd_surface) {
 		printf("Error creating LCD surface: %s\n", SDL_GetError());
 		abort();
@@ -205,13 +223,11 @@ void ui_init(uint32_t* ms_lcd_buffer)
 
 void ui_splashscreen_show()
 {
-	printf("Splashscreen ON\n");
 	splashscreen_show = 1;
 }
 
 void ui_splashscreen_hide()
 {
-	printf("Splashscreen OFF\n");
 	splashscreen_show = 0;
 }
 
@@ -240,35 +256,35 @@ void ui_render()
 {
 	SDL_RenderClear(renderer);
 
-	if (!splashscreen_show) {
+	if (splashscreen_show) {
+		// Render Splashscreen
+		SDL_RenderCopy(
+			renderer, splashscreen_tex,
+			&splashscreen_srcRect, &splashscreen_dstRect);
+		SDL_RenderCopy(
+			renderer, version_tex,
+			&version_srcRect, &version_dstRect);
+	} else {
 		// Render LCD
 		SDL_RenderCopy(
 			renderer, lcd_tex,
 			&lcd_srcRect, &lcd_dstRect);
+	}
 
-		// Render LED
-		SDL_RenderCopy(
-			renderer, led_tex,
-			&led_srcRect, &led_dstRect);
+	// Render LED
+	SDL_RenderCopy(
+		renderer, led_tex,
+		&led_srcRect, &led_dstRect);
 
 		// Render AC
-		SDL_RenderCopy(
-			renderer, ac_tex,
-			&ac_srcRect, &ac_dstRect);
+	SDL_RenderCopy(
+		renderer, ac_tex,
+		&ac_srcRect, &ac_dstRect);
 
 		// Render Battery
-		SDL_RenderCopy(
-			renderer, battery_tex,
-			&battery_srcRect, &battery_dstRect);
-	}
-
-	// We're rendering back to front, so we always check
-	// this last so the splash screen always appears on top.
-	if (splashscreen_show) {
-		SDL_RenderCopy(
-			renderer, splashscreen_tex,
-			&splashscreen_srcRect, &splashscreen_dstRect);
-	}
+	SDL_RenderCopy(
+		renderer, battery_tex,
+		&battery_srcRect, &battery_dstRect);
 
 	SDL_RenderPresent(renderer);
 }
