@@ -322,15 +322,6 @@ static void ui_set_ms_kbd(ms_ctx* ms, int scancode, int eventtype)
 		}
 
 	}
-
-	/* SDLK_F12 shouldn't match anything above */
-	if (scancode == SDLK_F12) {
-		if (eventtype == SDL_KEYDOWN) {
-			ms->power_button_n = 0;
-		} else {
-			ms->power_button_n = 1;
-		}
-	}
 }
 
 int ui_kbd_process(ms_ctx *ms)
@@ -355,14 +346,12 @@ int ui_kbd_process(ms_ctx *ms)
 			/* First, check to see if F12 was pressed */
 			if (event.key.keysym.sym == SDLK_F12) {
 				if (event.type == SDL_KEYDOWN) {
-					if (ms->power_state == MS_POWERSTATE_OFF) {
-						printf("POWER ON\n");
-						ms_power_on_reset(ms);
-						ui_splashscreen_hide();
-					}
+					ms->power_button_n = 0;
+				} else if (event.type == SDL_KEYUP) {
+					ms->power_button_n = 1;
 				}
+				ms_power_hint(ms);
 			}
-
 			/* Keys pressed while right ctrl is held */
 			if (event.key.keysym.mod & KMOD_RCTRL) {
 				if (event.type == SDL_KEYDOWN) {

@@ -106,7 +106,7 @@ static int ms_serial_valid(ms_ctx *ms)
 
 //----------------------------------------------------------------------------
 //
-//  Resets Mailstation state
+//  Power on reset of MailStation
 //
 void ms_power_on_reset(ms_ctx *ms)
 {
@@ -115,12 +115,15 @@ void ms_power_on_reset(ms_ctx *ms)
 	 * set/cleared by UI functions as time goes on, clearing this for
 	 * a reset could lose keys that are being held down */
 
-	lcd_init(ms);
-	ram_init(ms, NULL);
-	io_init(ms);
+	// NOTE: RAM is not re-initialized here, see ms_power_off()
+
 	ms->power_state = MS_POWERSTATE_ON;
+	printf("POWER ON\n");
+	lcd_init(ms);
+	io_init(ms);
 	ms->interrupt_mask = 0;
 	z80ex_reset(ms->z80);
+	ui_splashscreen_hide();
 }
 
 //----------------------------------------------------------------------------
@@ -130,8 +133,28 @@ void ms_power_on_reset(ms_ctx *ms)
 void ms_power_off(ms_ctx* ms)
 {
 	ms->power_state = MS_POWERSTATE_OFF;
+	printf("POWER OFF\n");
+
+	/* RAM needs to be re-initialized at power off. Simulating, as close
+	 * as possible, to real SRAM losing power and experiencing bit
+	 * corruption quickly. RAM is re-randomized, and if a bin was passed
+	 * that bin is loaded in to RAM.
+	 */
+	ram_init(ms, NULL);
 
 	ui_splashscreen_show();
+}
+
+//----------------------------------------------------------------------------
+//
+// Hint to enable power
+//
+void ms_power_hint(ms_ctx *ms)
+{
+	if (ms->power_state == MS_POWERSTATE_OFF &&
+	    ms->power_button_n == 0) {
+		ms_power_on_reset(ms);
+	}
 }
 
 /* z80ex Read memory callback function.
@@ -486,10 +509,7 @@ void z80ex_pwrite (
 
 	  // check for hardware power off bit in P28
 	  case UNKNOWN0x28:
-		if (val & 1) {
-			printf("POWER OFF\n");
-			ms_power_off(ms);
-		}
+		if (val & 1) ms_power_off(ms);
 		io_write(ms, port, val);
 		break;
 
