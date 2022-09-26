@@ -44,7 +44,23 @@ void usage(const char *path_arg, const char *cf_path, const char *df_path)
 	  "Debugger:\n"
 	  "  When running, press ctrl+c on the terminal window to halt exec\n"
 	  "  and drop to interactive debug shell. Use the command 'h' while\n"
-	  "  in the shell for further help output regarding debugger use\n\n",
+	  "  in the shell for further help output regarding debugger use\n\n"
+
+	  "Runtime Hotkeys:\n"
+	  " [F12]                           Power button\n"
+	  " [F1]-[F5]                       The 5 under-LCD function keys\n"
+	  " [F6]                            @ key\n"
+	  " [F7]                            Size key\n"
+	  " [F8]                            Check Spelling key\n"
+	  " [F9]                            Get E-Mail key\n"
+	  " [Home]                          Main key\n"
+	  " [End]                           Back key\n"
+	  " [Insert]                        Print key\n"
+	  " [L CTRL]                        Function key\n"
+	  " [R CTRL] + [r]                  Hard reset\n"
+          " [R CTRL] + [b]                  Cycle Battery levels\n"
+	  " [R CTRL] + [a]                  Toggle AC adapter connected\n"
+	  " [Esc]                           Immediately quit emulator\n",
 	  path_arg, path_arg, cf_path, df_path);
 }
 
