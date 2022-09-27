@@ -641,6 +641,10 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	 * 1bit buffer, this then translates to the 8bit buffer for SDLs use.
 	 */
 
+	/* Ensure buffer is allocated and then zero ir */
+	assert(ms != NULL);
+	memset(ms, '\0', sizeof(struct ms_ctx));
+
 	/* Seed (non-critical) RNG with time */
 	srand((unsigned int)time(NULL));
 

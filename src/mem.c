@@ -185,6 +185,17 @@ int df_deinit(ms_ctx *ms, ms_opts *options)
 	return ret;
 };
 
+int df_copy(ms_ctx *dest, ms_ctx *src)
+{
+	assert(dest->df != NULL);
+	assert(src->df != NULL);
+
+	/* DF lock state tracked in buffer byte beyond end of disk */
+	memcpy(dest->df, src->df, SZ_512K + 1);
+
+	return MS_OK;
+}
+
 uint8_t df_read(ms_ctx *ms, unsigned int absolute_addr)
 {
 	volatile uint8_t *wp_track = (ms->df + SZ_512K);
@@ -360,6 +371,17 @@ int cf_deinit(ms_ctx *ms, ms_opts *options)
 	return 0;
 }
 
+int cf_copy(ms_ctx *dest, ms_ctx *src)
+{
+	assert(dest->cf != NULL);
+	assert(src->cf != NULL);
+
+	/* DF lock state tracked in buffer byte beyond end of disk */
+	memcpy(dest->cf, src->cf, SZ_1M);
+
+	return MS_OK;
+}
+
 uint8_t cf_read(ms_ctx *ms, unsigned int absolute_addr)
 {
 	return *(ms->cf + absolute_addr);
@@ -492,6 +514,18 @@ int ram_deinit(ms_ctx *ms)
 	free(ms->ram_image);
 	ms->ram = NULL;
 	ms->ram_image = NULL;
+	return MS_OK;
+}
+
+int ram_copy(ms_ctx *dest, ms_ctx *src)
+{
+	assert(dest->ram != NULL);
+	assert(src->ram != NULL);
+
+	memcpy(dest->ram, src->ram, SZ_128K);
+	if (src->ram_image != NULL)
+		memcpy(dest->ram_image, src->ram_image, SZ_128K)
+
 	return MS_OK;
 }
 

@@ -45,6 +45,16 @@ int io_init(ms_ctx *ms)
 	return MS_OK;
 }
 
+int io_copy(ms_ctx *dest, ms_ctx *src)
+{
+	assert(dest->io != NULL);
+	assert(src->io != NULL);
+
+	memcpy(dest->io, src->io, SZ_256);
+
+	return MS_OK;
+}
+
 int io_deinit(ms_ctx *ms)
 {
 	free(ms->io);

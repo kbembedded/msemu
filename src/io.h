@@ -95,4 +95,6 @@ uint8_t io_read(ms_ctx *ms, unsigned int absolute_addr);
  */
 int io_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val);
 
+int io_copy(ms_ctx *dest, ms_ctx *src);
+
 #endif // __IO_H__

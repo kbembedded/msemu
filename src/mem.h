@@ -58,6 +58,9 @@ uint8_t df_read(ms_ctx *ms, unsigned int absolute_addr);
 uint8_t cf_read(ms_ctx *ms, unsigned int absolute_addr);
 uint8_t ram_read(ms_ctx *ms, unsigned int absolute_addr);
 
+int df_copy(ms_ctx *dest, ms_ctx *src);
+int cf_copy(ms_ctx *dest, ms_ctx *src);
+int ram_copy(ms_ctx *dest, ms_ctx *src);
 
 /* Unimplemented at this time */
 int cf_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val);

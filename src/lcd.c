@@ -144,3 +144,18 @@ int lcd_deinit(ms_ctx *ms)
 
 	return MS_OK;
 }
+
+int lcd_copy(ms_ctx *dest, ms_ctx *src)
+{
+	assert(dest->lcd_dat1bit != NULL);
+	assert(dest->lcd_datRGBA8888 != NULL);
+	assert(src->lcd_dat1bit != NULL);
+	assert(src->lcd_datRGBA8888 != NULL);
+
+	memcpy(dest->lcd_dat1bit, src->lcd_dat1bit,
+		((MS_LCD_WIDTH * MS_LCD_HEIGHT) / 8));
+	memcpy(dest->lcd_datRGBA8888, src->lcd_datRGBA8888,
+		(MS_LCD_WIDTH * MS_LCD_HEIGHT));
+
+	return MS_OK;
+}

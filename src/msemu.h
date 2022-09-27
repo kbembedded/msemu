@@ -61,6 +61,11 @@ typedef struct ms_ctx {
 	// XXX: I think this can go away?
 	uint8_t power_state;
 
+	/* Pointer to another ms_ctx to allow for saving and loading the
+	 * current exection state.
+	 */
+	struct ms_ctx *state;
+
 	/* Inputs to the CPU IO that are generated in hardware and wired to
 	 * IO ports. These need to be maintained in the context of the machine
 	 * rather than the IO port itself since the MailStation firmware could
