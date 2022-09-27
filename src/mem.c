@@ -524,7 +524,7 @@ int ram_copy(ms_ctx *dest, ms_ctx *src)
 
 	memcpy(dest->ram, src->ram, SZ_128K);
 	if (src->ram_image != NULL)
-		memcpy(dest->ram_image, src->ram_image, SZ_128K)
+		memcpy(dest->ram_image, src->ram_image, SZ_128K);
 
 	return MS_OK;
 }
