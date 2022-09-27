@@ -11,9 +11,16 @@
  * *ms		- Pointer to ms_ctx struct
  * *options	- Pointer to ms_opts struct w/ file path to open/copy contents from
  */
-int df_init(ms_ctx *ms, ms_opts *options);
-int cf_init(ms_ctx *ms, ms_opts *options);
-int ram_init(ms_ctx *ms, ms_opts *options);
+int df_init(ms_ctx *ms);
+int cf_init(ms_ctx *ms);
+int ram_init(ms_ctx *ms);
+
+/**
+ * Populate buffers from files if applicable
+ */
+int df_populate(ms_ctx *ms, ms_opts *options);
+int cf_populate(ms_ctx *ms, ms_opts *options);
+int ram_populate(ms_ctx *ms, ms_opts *options);
 
 /**
  * Write buffer contents back to file (optionally not write back)

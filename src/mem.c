@@ -78,6 +78,8 @@ const uint16_t df_unlock_lock_arr[] = {
  *
  * Should return number of bytes read from file, 0 on error
  */
+/* BUG: These functions should both probably be reworked to use ferror()
+ * to detect if there was an error, no file, etc. */
 static int filetobuf(uint8_t *buf, const char *file_path, ssize_t sz)
 {
 	FILE *fd = 0;
@@ -109,7 +111,15 @@ static int buftofile(uint8_t *buf, const char *file_path, ssize_t sz)
 /****************************************************
  * Dataflash Functions
  ***************************************************/
-int df_init(ms_ctx *ms, ms_opts *options)
+/* DF init
+ * Allocates buffer in ms_ctx
+ *
+ * This should only ever be called once per lifetime of an emulator instance
+ * as this is non-volatile there is no reason to re-initialize it. The
+ * option to not write the DF buffer back to disk is for the lifetime of the
+ * emulator instance rather than a single power cycle
+ */
+int df_init(ms_ctx *ms)
 {
 	assert(ms->df == NULL);
 
@@ -121,6 +131,24 @@ int df_init(ms_ctx *ms, ms_opts *options)
 		exit(EXIT_FAILURE);
 	}
 
+	return MS_OK;
+}
+
+/* DF populate
+ * Populates an allocated buffer from a file. If the file does not exist then
+ * a new one will be created during df_deinit. It is the responsibility of
+ * the main MailStation runtime logic to give some defaults to the DF if
+ * no valid file is passed in options.
+ *
+ * This can be called multiple times through the lifetime of an emulator
+ * instance, however, why?
+ */
+int df_populate(ms_ctx *ms, ms_opts *options)
+{
+	int ret = MS_OK;
+
+	assert(ms->df != NULL);
+
         /* Open dataflash and dump it in to a buffer.
          * The dataflash should be exactly 512 KiB.
          * Its possible to have a short dump, where the remaining bytes are
@@ -131,10 +159,10 @@ int df_init(ms_ctx *ms, ms_opts *options)
 	if (!filetobuf(ms->df, options->df_path, SZ_512K)) {
                 printf("Existing dataflash image not found at '%s', creating "
                   "a new dataflah image.\n", options->df_path);
-		return ENOENT;
+		ret = ENOENT;
 	}
 
-	return MS_OK;
+	return ret;
 }
 
 int df_deinit(ms_ctx *ms, ms_opts *options)
@@ -273,7 +301,13 @@ int df_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val)
 /****************************************************
  * Codeflash Functions
  ***************************************************/
-int cf_init(ms_ctx *ms, ms_opts *options)
+/* CF init
+ * Allocates buffer in ms_ctx
+ *
+ * This should only ever be called once per lifetime of an emulator instance
+ * as this is non-volatile there is no reason to re-initialize it.
+ */
+int cf_init(ms_ctx *ms)
 {
 	assert(ms->cf == NULL);
 
@@ -283,6 +317,20 @@ int cf_init(ms_ctx *ms, ms_opts *options)
 		exit(EXIT_FAILURE);
 	}
 
+	return MS_OK;
+}
+
+/* CF populate
+ * Populates an allocated buffer from a file. If the file does not exist then
+ * there isn't much point to executing but that is the main MailStation runtime
+ * to decide that.
+ *
+ * This can be called multiple times through the lifetime of an emulator
+ * instance, however, why?
+ */
+int cf_populate(ms_ctx *ms, ms_opts *options)
+{
+	int ret = MS_OK;
         /* Open codeflash and dump it in to a buffer.
          * The codeflash should be exactly 1 MiB.
          * Its possible to have a short dump, where the remaining bytes are
@@ -294,10 +342,10 @@ int cf_init(ms_ctx *ms, ms_opts *options)
                 log_error("Failed to load codeflash from '%s'.\n", options->cf_path);
 		free(ms->cf);
 		ms->cf = NULL;
-                return ENOENT;
+		ret = ENOENT;
         }
 
-	return MS_OK;
+	return ret;
 }
 
 int cf_deinit(ms_ctx *ms, ms_opts *options)
@@ -343,11 +391,11 @@ int cf_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val)
  * for these. The RAM is given new random data, and if the image buffer is
  * valid, this is re-applied to RAM.
  */
-int ram_init(ms_ctx *ms, ms_opts *options)
+/* XXX: I'm bored of documenting, do that later */
+int ram_init(ms_ctx *ms)
 {
 	int i;
 	uint8_t *ram_ptr;
-	int image_len;
 
 	if (ms->ram == NULL) {
 		ms->ram = (uint8_t *)malloc(SZ_128K);
@@ -356,38 +404,29 @@ int ram_init(ms_ctx *ms, ms_opts *options)
 			exit(EXIT_FAILURE);
 		}
 
-		/* If a RAM image file was specified, load it. Otherwise, the RAM
-		 * buffer will just keep its random contents.
-		 * The image file can really be any length. If it is shorter than
-		 * 128 KiB, then that shouldn't cause any issues since the buffer
-		 * was already populated with random contents.
+		/* Allocate ram_image buffer now, it is the responsibility of
+		 * ram_populate() (or other caller) to deallocate it if it is
+		 * unused!
+		 * At init time, it should be unallocated, if not NULL then
+		 * something went wrong.
 		 */
-		if (options->ram_path != NULL) {
-			ms->ram_image = (uint8_t *)malloc(SZ_128K);
-			/* Buffer has been allocated, throw random data in it
-			 * to simulate SRAM startup */
-			ram_ptr = ms->ram_image;
-			for (i = 0; i < SZ_128K; i++) {
-				*ram_ptr = rand() & 0xFF;
-				ram_ptr++;
-			}
-			image_len = filetobuf(ms->ram_image, options->ram_path, SZ_128K);
-			if (!image_len) {
-				log_error("Failed to load RAM image from '%s'.\n", options->ram_path);
-				free(ms->ram_image);
-				ms->ram_image = NULL;
-				return ENOENT;
-			}
-	        }
+		assert(ms->ram_image == NULL);
+		ms->ram_image = (uint8_t *)malloc(SZ_128K);
+		if (ms->ram_image == NULL) {
+			printf("Unable to allocate RAM image buffer\n");
+			exit(EXIT_FAILURE);
+		}
 	}
 
-	/* If image_buf is not null, that is, an image was loaded in to it
-	 * at first ram_init() call, then reload those contents back in */
+	/* Either the buffers were freshly allocated or we're here to re-init
+	 * them with random data/pre-made image.
+	 */
 	if (ms->ram_image != NULL) {
-		strncpy(ms->ram, ms->ram_image, SZ_128K);
+		/* The ram_image buffer should already have been randomized
+		 * and then valid data overlayed on top of it.
+		 */
+		memcpy(ms->ram, ms->ram_image, SZ_128K);
 	} else {
-		/* Buffer has been allocated, throw random data in it
-		 * to simulate SRAM startup */
 		ram_ptr = ms->ram;
 		for (i = 0; i < SZ_128K; i++) {
 			*ram_ptr = rand() & 0xFF;
@@ -395,7 +434,56 @@ int ram_init(ms_ctx *ms, ms_opts *options)
 		}
 	}
 
-	return 0;
+	return MS_OK;
+}
+
+int ram_populate(ms_ctx *ms, ms_opts *options)
+{
+	int i;
+	uint8_t *ram_ptr;
+	int image_len;
+	int ret = MS_OK;
+
+	assert(ms->ram != NULL);
+
+	/* Both buffers are freshly allocated and the main RAM buffer is
+	 * random. If there is a RAM image passed in options, load that in
+	 * to ram_image and load that in to RAM. If no RAM image passed, free
+	 * the ram_image buffer.
+	 */
+
+
+	/* If a RAM image file was specified, load it. Otherwise, the RAM
+	 * buffer will just keep its random contents.
+	 * The image file can really be any length. If it is shorter than
+	 * 128 KiB, then that shouldn't cause any issues since the buffer
+	 * was already populated with random contents.
+	 */
+	if (options->ram_path != NULL) {
+		/* Buffer has been allocated, throw random data in it
+		 * to simulate SRAM startup */
+		ram_ptr = ms->ram_image;
+		for (i = 0; i < SZ_128K; i++) {
+			*ram_ptr = rand() & 0xFF;
+			ram_ptr++;
+		}
+
+		/* Now attempt to load the RAM image buffer from file. If it
+		 * fails for any reason, free the buffer. */
+		image_len = filetobuf(ms->ram_image, options->ram_path, SZ_128K);
+		if (!image_len) {
+			log_error("Failed to load RAM image from '%s'.\n", options->ram_path);
+			free(ms->ram_image);
+			ms->ram_image = NULL;
+			ret = ENOENT;
+		}
+	} else {
+		/* Free the ram_image buffer, we're never going to use it. */
+		free(ms->ram_image);
+		ms->ram_image = NULL;
+	}
+
+	return ret;
 }
 
 int ram_deinit(ms_ctx *ms)
@@ -404,7 +492,7 @@ int ram_deinit(ms_ctx *ms)
 	free(ms->ram_image);
 	ms->ram = NULL;
 	ms->ram_image = NULL;
-	return 0;
+	return MS_OK;
 }
 
 uint8_t ram_read(ms_ctx *ms, unsigned int absolute_addr)
@@ -415,5 +503,5 @@ uint8_t ram_read(ms_ctx *ms, unsigned int absolute_addr)
 int ram_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val)
 {
 	*(ms->ram + absolute_addr) = val;
-	return 0;
+	return MS_OK;
 }

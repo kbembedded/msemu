@@ -140,7 +140,7 @@ void ms_power_off(ms_ctx* ms)
 	 * corruption quickly. RAM is re-randomized, and if a bin was passed
 	 * that bin is loaded in to RAM.
 	 */
-	ram_init(ms, NULL);
+	ram_init(ms);
 
 	ui_splashscreen_show();
 }
@@ -664,16 +664,19 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	);
 
 	/* Initialize buffers for emulating the various peripherals */
-	if (lcd_init(ms)) return MS_ERR;
-	if (io_init(ms)) return MS_ERR;
-	if (ram_init(ms, options)) return MS_ERR;
-	if (cf_init(ms, options) == ENOENT) return MS_ERR;
+	if (lcd_init(ms) != MS_OK) return MS_ERR;
+	if (io_init(ms) != MS_OK) return MS_ERR;
+	if (ram_init(ms) != MS_OK) return MS_ERR;
+	if (ram_populate(ms, options) != MS_OK) return MS_ERR;
+	if (cf_init(ms) != MS_OK) return MS_ERR;
+	if (cf_populate(ms, options) != MS_OK) return MS_ERR;
 
 	/* If opening a new, blank, DF buffer, then assign it a random MS
 	 * compatible serial number.
 	 * If the DF file opened has an invalid serial number, just complain
 	 * loudly with a warning. */
-	if (df_init(ms, options) == ENOENT) {
+	if (df_init(ms) != MS_OK) return MS_ERR;
+	if (df_populate(ms, options) == ENOENT) {
 		ms_set_df_rnd_serial(ms);
 	}
 	if (ms_serial_valid(ms)) {
