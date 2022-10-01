@@ -21,4 +21,6 @@ int lcd_init(ms_ctx *ms);
 
 int lcd_deinit(ms_ctx *ms);
 
+int lcd_copy(ms_ctx *dest, ms_ctx *src);
+
 #endif // __LCD_H__
