@@ -14,6 +14,7 @@ add_executable(msemu
 	msemu.c
 	io.c
 	ui.c
+	ms_state.c
 )
 
 if (BUILD_DEPENDENCIES)
