@@ -171,7 +171,7 @@ int df_deinit(ms_ctx *ms, ms_opts *options)
 
 	assert(ms->df != NULL);
 
-	if (options->df_save_to_disk) {
+	if (options != NULL && options->df_save_to_disk) {
 		ret = buftofile(ms->df, options->df_path, SZ_512K);
 		if (ret < SZ_512K) {
 			printf("Failed writing dataflash, only wrote %d\n",
