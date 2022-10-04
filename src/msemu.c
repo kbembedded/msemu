@@ -39,7 +39,7 @@ const char* const ms_dev_map_text[] = {
 //
 //  Convert uint8_t to BCD format
 //
-unsigned char hex2bcd (unsigned char x)
+static unsigned char hex2bcd (unsigned char x)
 {
 	unsigned char y;
 	y = (x / 10) << 4;
@@ -59,9 +59,10 @@ unsigned char hex2bcd (unsigned char x)
  * not seem to be enforced in Mailstation firmware. Nevertheless, the last char
  * is set to a '-'
  */
-static void ms_set_df_rnd_serial(uint8_t *df_buf)
+static void ms_set_df_rnd_serial(ms_ctx *ms)
 {
 	int i;
+	uint8_t *df_buf = ms->df;
 	uint8_t rnd;
 
 	df_buf += DF_SN_OFFS;
@@ -87,9 +88,10 @@ static void ms_set_df_rnd_serial(uint8_t *df_buf)
  * In all observed Mailstations, the last character is '-', but it does
  * not seem to be enforced in Mailstation firmware; it is not enforced here
  */
-static int ms_serial_valid(uint8_t *df_buf)
+static int ms_serial_valid(ms_ctx *ms)
 {
 	int i;
+	uint8_t *df_buf = ms->df;
 	int ret = MS_OK;
 
 	df_buf += DF_SN_OFFS;
@@ -104,7 +106,7 @@ static int ms_serial_valid(uint8_t *df_buf)
 
 //----------------------------------------------------------------------------
 //
-//  Resets Mailstation state
+//  Power on reset of MailStation
 //
 void ms_power_on_reset(ms_ctx *ms)
 {
@@ -113,12 +115,15 @@ void ms_power_on_reset(ms_ctx *ms)
 	 * set/cleared by UI functions as time goes on, clearing this for
 	 * a reset could lose keys that are being held down */
 
-	lcd_init(&ms->lcd_dat1bit, &ms->lcd_datRGBA8888, &ms->lcd_cas);
-	ram_init(&ms->ram, NULL);
-	io_init(&ms->io);
+	// NOTE: RAM is not re-initialized here, see ms_power_off()
+
 	ms->power_state = MS_POWERSTATE_ON;
+	printf("POWER ON\n");
+	lcd_init(ms);
+	io_init(ms);
 	ms->interrupt_mask = 0;
 	z80ex_reset(ms->z80);
+	ui_splashscreen_hide();
 }
 
 //----------------------------------------------------------------------------
@@ -128,8 +133,28 @@ void ms_power_on_reset(ms_ctx *ms)
 void ms_power_off(ms_ctx* ms)
 {
 	ms->power_state = MS_POWERSTATE_OFF;
+	printf("POWER OFF\n");
+
+	/* RAM needs to be re-initialized at power off. Simulating, as close
+	 * as possible, to real SRAM losing power and experiencing bit
+	 * corruption quickly. RAM is re-randomized, and if a bin was passed
+	 * that bin is loaded in to RAM.
+	 */
+	ram_init(ms, NULL);
 
 	ui_splashscreen_show();
+}
+
+//----------------------------------------------------------------------------
+//
+// Hint to enable power
+//
+void ms_power_hint(ms_ctx *ms)
+{
+	if (ms->power_state == MS_POWERSTATE_OFF &&
+	    ms->power_button_n == 0) {
+		ms_power_on_reset(ms);
+	}
 }
 
 /* z80ex Read memory callback function.
@@ -170,12 +195,12 @@ Z80EX_BYTE z80ex_mread(
 		break;
 	  /* TODO: Add page range check */
 	  case 1:
-		dev = (io_read(ms->io, SLOT4_DEV) & 0x0F);
-		page = io_read(ms->io, SLOT4_PAGE);
+		dev = (io_read(ms, SLOT4_DEV) & 0x0F);
+		page = io_read(ms, SLOT4_PAGE);
 		break;
 	  case 2:
-		dev = (io_read(ms->io, SLOT8_DEV) & 0x0F);
-		page = io_read(ms->io, SLOT8_PAGE);
+		dev = (io_read(ms, SLOT8_DEV) & 0x0F);
+		page = io_read(ms, SLOT8_PAGE);
 		break;
 	  case 3:
 		dev = RAM;
@@ -194,7 +219,7 @@ Z80EX_BYTE z80ex_mread(
 	switch (dev) {
 	  case LCD_L:
 	  case LCD_R:
-		ret = lcd_read(ms->lcd_dat1bit, ms->lcd_datRGBA8888, &ms->lcd_cas, ms->io, (addr & ~0xC000), dev);
+		ret = lcd_read(ms, (addr & ~0xC000), dev);
 		break;
 
 	  case MODEM:
@@ -203,15 +228,15 @@ Z80EX_BYTE z80ex_mread(
 		break;
 
 	  case CF:
-		ret = cf_read(ms->cf, ((addr & ~0xC000) + (0x4000 * page)));
+		ret = cf_read(ms, ((addr & ~0xC000) + (0x4000 * page)));
 		break;
 
 	  case DF:
-		ret = df_read(ms->df, ((addr & ~0xC000) + (0x4000 * page)));
+		ret = df_read(ms, ((addr & ~0xC000) + (0x4000 * page)));
 		break;
 
 	  case RAM:
-		ret = ram_read(ms->ram, ((addr & ~0xC000) + (0x4000 * page)));
+		ret = ram_read(ms, ((addr & ~0xC000) + (0x4000 * page)));
 		log_debug(" * MEM   R [%04X] -> %02X\n", addr, ret);
 		break;
 
@@ -262,12 +287,12 @@ void z80ex_mwrite(
 		break;
 	  /* TODO: Add page range check */
 	  case 1:
-		dev = (io_read(ms->io, SLOT4_DEV) & 0x0F);
-		page = io_read(ms->io, SLOT4_PAGE);
+		dev = (io_read(ms, SLOT4_DEV) & 0x0F);
+		page = io_read(ms, SLOT4_PAGE);
 		break;
 	  case 2:
-		dev = (io_read(ms->io, SLOT8_DEV) & 0x0F);
-		page = io_read(ms->io, SLOT8_PAGE);
+		dev = (io_read(ms, SLOT8_DEV) & 0x0F);
+		page = io_read(ms, SLOT8_PAGE);
 		break;
 	  case 3:
 		dev = RAM;
@@ -286,11 +311,11 @@ void z80ex_mwrite(
 	 */
 	  case LCD_L:
 	  case LCD_R:
-		lcd_write(ms->lcd_dat1bit, ms->lcd_datRGBA8888, &ms->lcd_cas, ms->io, (addr & ~0xC000), val, dev);
+		lcd_write(ms, (addr & ~0xC000), val, dev);
 		break;
 
 	  case DF:
-		df_write(ms->df, ((addr & ~0xC000) + (0x4000 * page)), val);
+		df_write(ms, ((addr & ~0xC000) + (0x4000 * page)), val);
 		break;
 
 	  case MODEM:
@@ -298,7 +323,7 @@ void z80ex_mwrite(
 		break;
 
 	  case RAM:
-		ram_write(ms->ram, ((addr & ~0xC000) + (0x4000 * page)), val);
+		ram_write(ms, ((addr & ~0xC000) + (0x4000 * page)), val);
 		log_debug(" * MEM   W [%04X] <- %02X\n", addr, val);
 		break;
 
@@ -352,13 +377,13 @@ Z80EX_BYTE z80ex_pread (
 		rtc_time = localtime(&theTime);
 	}
 
-	log_debug(" * IO    R [  %02X] -> %02X\n", port, io_read(ms->io, port));
+	log_debug(" * IO    R [  %02X] -> %02X\n", port, io_read(ms, port));
 
 	switch (port) {
 	  case KEYBOARD:// emulate keyboard matrix output
 		// keyboard row is 10 bits wide, P1.x = low bits, P2.0-1 = high bits
 		/* XXX: This is REAL clunky */
-		kbaddr = (io_read(ms->io, KEYBOARD)) + (((io_read(ms->io, MISC2)) & 3) << 8);
+		kbaddr = (io_read(ms, KEYBOARD)) + (((io_read(ms, MISC2)) & 3) << 8);
 
 		// all returned bits should be high unless a key is pressed
 		kbresult = 0xFF;
@@ -378,11 +403,19 @@ Z80EX_BYTE z80ex_pread (
 
 	  // acknowledge power good + power button status
 	  // Also has some parport control bits
-	  /* TODO: Implement hooks here to set various power
-	   * states for testing?
-	   */
 	  case MISC9:
-		ret = (uint8_t)0xE0 | ((~ms->power_button & 1) << 4);
+		ret = 0;
+		if (ms->ac_status) ret |= MISC9_AC_GOOD;
+		if (ms->power_button_n) ret |= MISC9_PWR_BTN;
+		switch (ms->batt_status) {
+		case BATT_HIGH:
+			ret |= (MISC9_BATT_HIGH | MISC9_BATT_GOOD);
+			break;
+		case BATT_LOW:
+			ret |= MISC9_BATT_GOOD;
+			break;
+		}
+		ret = ret | (io_read(ms, MISC9) & 0x0F);
 		break;
 
 	  // These are all for the RTC
@@ -427,7 +460,7 @@ Z80EX_BYTE z80ex_pread (
 		break;
 
 	  default:
-		ret = io_read(ms->io, port);
+		ret = io_read(ms, port);
 		break;
 	}
 
@@ -465,27 +498,24 @@ void z80ex_pwrite (
 	switch (port) {
 	  case MISC2:
 		ui_update_led(!!(val & MISC2_LED_BIT));
-		io_write(ms->io, port, val);
+		io_write(ms, port, val);
 		break;
 
 	  // set interrupt masks
 	  case IRQ_MASK:
 		ms->interrupt_mask &= val;
-		io_write(ms->io, port, val);
+		io_write(ms, port, val);
 		break;
 
 	  // check for hardware power off bit in P28
 	  case UNKNOWN0x28:
-		if (val & 1) {
-			printf("POWER OFF\n");
-			ms_power_off(ms);
-		}
-		io_write(ms->io, port, val);
+		if (val & 1) ms_power_off(ms);
+		io_write(ms, port, val);
 		break;
 
 	  // otherwise just save written value
 	  default:
-		io_write(ms->io, port, val);
+		io_write(ms, port, val);
 		break;
 	}
 }
@@ -543,7 +573,7 @@ int process_interrupts (ms_ctx* ms)
 		icount = 0;
 
 		// do time16 interrupt
-		if ((io_read(ms->io, IRQ_MASK) & 0x10) && !(ms->interrupt_mask & 0x10))
+		if ((io_read(ms, IRQ_MASK) & 0x10) && !(ms->interrupt_mask & 0x10))
 		{
 			ms->interrupt_mask |= 0x10;
 			return z80ex_int(ms->z80);
@@ -551,7 +581,7 @@ int process_interrupts (ms_ctx* ms)
 	}
 
 	// Trigger keyboard interrupt if necessary (64hz)
-	if ((io_read(ms->io, IRQ_MASK) & 2) && !(ms->interrupt_mask & 2))
+	if ((io_read(ms, IRQ_MASK) & 2) && !(ms->interrupt_mask & 2))
 	{
 		ms->interrupt_mask |= 2;
 		return z80ex_int(ms->z80);
@@ -568,6 +598,38 @@ int process_interrupts (ms_ctx* ms)
 	return 0;
 }
 
+/* Enable, disable, or toggle AC adapter status
+ *
+ * Writes to the ms_ctx tracking variable
+ */
+void ms_power_ac_set_status(ms_ctx *ms, int status)
+{
+	if (status == AC_TOGGLE) {
+		ms->ac_status ^= AC_GOOD;
+	} else {
+		ms->ac_status = status;
+	}
+
+	ui_update_ac(ms->ac_status);
+}
+
+/* Set battery voltage status, high, low, depleted
+ *
+ * Writes to the ms_ctx tracking variable
+ */
+void ms_power_batt_set_status(ms_ctx *ms, int status)
+{
+	if (status == BATT_CYCLE) {
+		ms->batt_status++;
+		if (ms->batt_status == BATT_CYCLE)
+			ms->batt_status = BATT_DEPLETE;
+	} else {
+		ms->batt_status = status;
+	}
+
+	ui_update_battery(ms->batt_status);
+}
+
 int ms_init(ms_ctx* ms, ms_opts* options)
 {
 	/* Allocate and clear buffers.
@@ -582,13 +644,17 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 	/* Seed (non-critical) RNG with time */
 	srand((unsigned int)time(NULL));
 
+	/* Initialize hardware states of the MailStation. */
 	ms->interrupt_mask = 0;
-	ms->power_button = 0;
+	ms->power_button_n = 1;
 	ms->power_state = MS_POWERSTATE_OFF;
+	ms_power_ac_set_status(ms, options->ac_start);
+	ms_power_batt_set_status(ms, options->batt_start);
 
 	/* Set up keyboard emulation array */
 	memset(ms->key_matrix, 0xff, sizeof(ms->key_matrix));
 
+	/* Create and set up Z80 machine and access funcs */
 	ms->z80 = z80ex_create(
 		z80ex_mread, (void*)ms,
 		z80ex_mwrite, (void*)ms,
@@ -597,21 +663,20 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 		z80ex_intread, (void*)ms
 	);
 
-	if (lcd_init(&ms->lcd_dat1bit, &ms->lcd_datRGBA8888, &ms->lcd_cas))
-		return MS_ERR;
-	if (io_init(&ms->io)) return MS_ERR;
-	if (ram_init(&ms->ram, options)) return MS_ERR;
-
-	if (cf_init(&ms->cf, options) == ENOENT) return MS_ERR;
+	/* Initialize buffers for emulating the various peripherals */
+	if (lcd_init(ms)) return MS_ERR;
+	if (io_init(ms)) return MS_ERR;
+	if (ram_init(ms, options)) return MS_ERR;
+	if (cf_init(ms, options) == ENOENT) return MS_ERR;
 
 	/* If opening a new, blank, DF buffer, then assign it a random MS
 	 * compatible serial number.
 	 * If the DF file opened has an invalid serial number, just complain
 	 * loudly with a warning. */
-	if (df_init(&ms->df, options) == ENOENT) {
-		ms_set_df_rnd_serial(ms->df);
+	if (df_init(ms, options) == ENOENT) {
+		ms_set_df_rnd_serial(ms);
 	}
-	if (ms_serial_valid(ms->df)) {
+	if (ms_serial_valid(ms)) {
 		printf("WARNING! Dataflash does not have valid serial num!\n");
 		printf("This may not be a dataflash image!\n\n");
 	}
@@ -626,10 +691,11 @@ int ms_init(ms_ctx* ms, ms_opts* options)
 
 int ms_deinit(ms_ctx *ms, ms_opts *options)
 {
-	io_deinit(&ms->io);
-	ram_deinit(&ms->ram);
-	cf_deinit(&ms->cf, options);
-	df_deinit(&ms->df, options);
+	io_deinit(ms);
+	ram_deinit(ms);
+	lcd_deinit(ms);
+	cf_deinit(ms, options);
+	df_deinit(ms, options);
 
 	return 0;
 }

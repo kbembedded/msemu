@@ -109,14 +109,14 @@ static int buftofile(uint8_t *buf, const char *file_path, ssize_t sz)
 /****************************************************
  * Dataflash Functions
  ***************************************************/
-int df_init(uint8_t **df_buf, ms_opts *options)
+int df_init(ms_ctx *ms, ms_opts *options)
 {
-	assert(*df_buf == NULL);
+	assert(ms->df == NULL);
 
 	/* Allocate 512K+1 and store the state of the writeprotect in the +1
 	 * This should not and does not get written back to disk! */
-	*df_buf = (uint8_t *)calloc(SZ_512K+1, sizeof(uint8_t));
-	if (*df_buf == NULL) {
+	ms->df = (uint8_t *)calloc(SZ_512K+1, sizeof(uint8_t));
+	if (ms->df == NULL) {
 		printf("Unable to allocate dataflash buffer\n");
 		exit(EXIT_FAILURE);
 	}
@@ -128,7 +128,7 @@ int df_init(uint8_t **df_buf, ms_opts *options)
          * It should never be longer either. If it is, we just pretend like
          * we didn't notice. This might be unwise behavior.
          */
-	if (!filetobuf(*df_buf, options->df_path, SZ_512K)) {
+	if (!filetobuf(ms->df, options->df_path, SZ_512K)) {
                 printf("Existing dataflash image not found at '%s', creating "
                   "a new dataflah image.\n", options->df_path);
 		return ENOENT;
@@ -137,29 +137,29 @@ int df_init(uint8_t **df_buf, ms_opts *options)
 	return MS_OK;
 }
 
-int df_deinit(uint8_t **df_buf, ms_opts *options)
+int df_deinit(ms_ctx *ms, ms_opts *options)
 {
 	int ret = MS_OK;
 
-	assert(*df_buf != NULL);
+	assert(ms->df != NULL);
 
 	if (options->df_save_to_disk) {
-		ret = buftofile(*df_buf, options->df_path, SZ_512K);
+		ret = buftofile(ms->df, options->df_path, SZ_512K);
 		if (ret < SZ_512K) {
 			printf("Failed writing dataflash, only wrote %d\n",
 			  ret);
 			ret = EIO;
 		}
 	}
-	free(*df_buf);
-	*df_buf = NULL;
+	free(ms->df);
+	ms->df = NULL;
 
 	return ret;
 };
 
-uint8_t df_read(uint8_t *df_buf, unsigned int absolute_addr)
+uint8_t df_read(ms_ctx *ms, unsigned int absolute_addr)
 {
-	volatile uint8_t *wp_track = (df_buf + SZ_512K);
+	volatile uint8_t *wp_track = (ms->df + SZ_512K);
 
 	/* See top of file for explanation of code protect and tracking it */
 
@@ -181,12 +181,12 @@ uint8_t df_read(uint8_t *df_buf, unsigned int absolute_addr)
 		*wp_track &= ~(0x7);
 	}
 
-	return *(df_buf + absolute_addr);
+	return *(ms->df + absolute_addr);
 }
 
 /* Interpret commands intended for 28SF040 flash
  *
- * The Z80 will output commands and an addres. In order to properly handle a
+ * The Z80 will output commands and an address. In order to properly handle a
  * write, we have to interpret these commands like it were an actual 28SF040.
  *
  * The read path of the dataflash does not have a command associated with it,
@@ -197,11 +197,11 @@ uint8_t df_read(uint8_t *df_buf, unsigned int absolute_addr)
  * While there are a few different possible errors, they are not indicated
  * as a return value at this time.
  */
-int df_write(uint8_t *df_buf, unsigned int absolute_addr, uint8_t val)
+int df_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val)
 {
 	static uint8_t cycle;
 	static uint8_t cmd;
-	volatile uint8_t *wp_track = (df_buf + SZ_512K);
+	volatile uint8_t *wp_track = (ms->df + SZ_512K);
 
 	/* ANY write to DF will break the current software protect state
 	 * machine sequence! */
@@ -233,7 +233,7 @@ int df_write(uint8_t *df_buf, unsigned int absolute_addr, uint8_t val)
 			}
 			absolute_addr &= 0xFFFFFF00;
 			log_debug(" * DF    Sector-Erase: 0x%X\n", absolute_addr);
-			memset((df_buf + absolute_addr), 0xFF, 0x100);
+			memset((ms->df + absolute_addr), 0xFF, 0x100);
 			break;
 		  case 0x10: /* Byte program */
 			if (!(*wp_track & 0x80)) {
@@ -241,7 +241,7 @@ int df_write(uint8_t *df_buf, unsigned int absolute_addr, uint8_t val)
 				break;
 			}
 			log_debug(" * DF    W [%04X] <- %02X\n", absolute_addr,val);
-			*(df_buf + absolute_addr) = val;
+			*(ms->df + absolute_addr) = val;
 			break;
 		  case 0x30: /* Chip erase, execute cmd is 0x30 */
 			if (val != 0x30) break;
@@ -250,7 +250,7 @@ int df_write(uint8_t *df_buf, unsigned int absolute_addr, uint8_t val)
 				break;
 			}
 			log_debug(" * DF    Chip erase\n");
-			memset(df_buf, 0xFF, SZ_512K);
+			memset(ms->df, 0xFF, SZ_512K);
 			break;
 		  case 0x90: /* Read ID */
 			/* XXX: Currently does not do any operation with this
@@ -273,12 +273,12 @@ int df_write(uint8_t *df_buf, unsigned int absolute_addr, uint8_t val)
 /****************************************************
  * Codeflash Functions
  ***************************************************/
-int cf_init(uint8_t **cf_buf, ms_opts *options)
+int cf_init(ms_ctx *ms, ms_opts *options)
 {
-	assert(*cf_buf == NULL);
+	assert(ms->cf == NULL);
 
-	*cf_buf = (uint8_t *)calloc(SZ_1M, sizeof(uint8_t));
-	if (*cf_buf == NULL) {
+	ms->cf = (uint8_t *)calloc(SZ_1M, sizeof(uint8_t));
+	if (ms->cf == NULL) {
 		printf("Unable to allocate codeflash buffer\n");
 		exit(EXIT_FAILURE);
 	}
@@ -290,32 +290,34 @@ int cf_init(uint8_t **cf_buf, ms_opts *options)
          * It should never be longer either. If it is, we just pretend like
          * we didn't notice. This might be unwise behavior.
          */
-	if (!filetobuf(*cf_buf, options->cf_path, SZ_1M)) {
+	if (!filetobuf(ms->cf, options->cf_path, SZ_1M)) {
                 log_error("Failed to load codeflash from '%s'.\n", options->cf_path);
-		free(*cf_buf);
-		*cf_buf = NULL;
+		free(ms->cf);
+		ms->cf = NULL;
                 return ENOENT;
         }
 
 	return MS_OK;
 }
 
-int cf_deinit(uint8_t **cf_buf, ms_opts *options)
+int cf_deinit(ms_ctx *ms, ms_opts *options)
 {
-	assert(*cf_buf != NULL);
+	assert(ms->cf != NULL);
 
-	free(*cf_buf);
-	*cf_buf = NULL;
+	/* Once CF writing is implemented, add writeback process here */
+
+	free(ms->cf);
+	ms->cf = NULL;
 
 	return 0;
 }
 
-uint8_t cf_read(uint8_t *cf_buf, unsigned int absolute_addr)
+uint8_t cf_read(ms_ctx *ms, unsigned int absolute_addr)
 {
-	return *(cf_buf + absolute_addr);
+	return *(ms->cf + absolute_addr);
 }
 
-int cf_write(uint8_t *cf_buf, unsigned int absolute_addr, uint8_t val)
+int cf_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val)
 {
 	printf("CF write not implemented!\n");
 
@@ -340,20 +342,16 @@ int cf_write(uint8_t *cf_buf, unsigned int absolute_addr, uint8_t val)
  * Subequent calls to ram_init() can be made. The *options arg can be NULL
  * for these. The RAM is given new random data, and if the image buffer is
  * valid, this is re-applied to RAM.
- *
- * There is some shoddyness in the fact that the image buffer is a global
- * here. This should be refactored out at some point.
  */
-static uint8_t *image_buf = NULL;
-int ram_init(uint8_t **ram_buf, ms_opts *options)
+int ram_init(ms_ctx *ms, ms_opts *options)
 {
 	int i;
 	uint8_t *ram_ptr;
-	static int image_len = 0;
+	int image_len;
 
-	if (*ram_buf == NULL) {
-		*ram_buf = (uint8_t *)calloc(SZ_128K, sizeof(uint8_t));
-		if (*ram_buf == NULL) {
+	if (ms->ram == NULL) {
+		ms->ram = (uint8_t *)malloc(SZ_128K);
+		if (ms->ram == NULL) {
 			printf("Unable to allocate RAM buffer\n");
 			exit(EXIT_FAILURE);
 		}
@@ -362,55 +360,60 @@ int ram_init(uint8_t **ram_buf, ms_opts *options)
 		 * buffer will just keep its random contents.
 		 * The image file can really be any length. If it is shorter than
 		 * 128 KiB, then that shouldn't cause any issues since the buffer
-		 * was already populate with random contents.
+		 * was already populated with random contents.
 		 */
 		if (options->ram_path != NULL) {
-			image_buf = (uint8_t *)calloc(SZ_128K, sizeof(uint8_t));
-			image_len = filetobuf(image_buf, options->ram_path, SZ_128K);
+			ms->ram_image = (uint8_t *)malloc(SZ_128K);
+			/* Buffer has been allocated, throw random data in it
+			 * to simulate SRAM startup */
+			ram_ptr = ms->ram_image;
+			for (i = 0; i < SZ_128K; i++) {
+				*ram_ptr = rand() & 0xFF;
+				ram_ptr++;
+			}
+			image_len = filetobuf(ms->ram_image, options->ram_path, SZ_128K);
 			if (!image_len) {
 				log_error("Failed to load RAM image from '%s'.\n", options->ram_path);
-				free(image_buf);
-				image_buf = NULL;
+				free(ms->ram_image);
+				ms->ram_image = NULL;
 				return ENOENT;
 			}
 	        }
 	}
 
-	/* Buffer has been allocated, throw random data in it
-	 * to simulate SRAM startup */
-	ram_ptr = *ram_buf;
-	for (i = 0; i < SZ_128K; i++) {
-		*ram_ptr = rand() & 0xFF;
-		ram_ptr++;
-	}
-
 	/* If image_buf is not null, that is, an image was loaded in to it
 	 * at first ram_init() call, then reload those contents back in */
-	if (image_buf != NULL) {
-		strncpy(*ram_buf, image_buf, image_len);
+	if (ms->ram_image != NULL) {
+		strncpy(ms->ram, ms->ram_image, SZ_128K);
+	} else {
+		/* Buffer has been allocated, throw random data in it
+		 * to simulate SRAM startup */
+		ram_ptr = ms->ram;
+		for (i = 0; i < SZ_128K; i++) {
+			*ram_ptr = rand() & 0xFF;
+			ram_ptr++;
+		}
 	}
 
-
 	return 0;
 }
 
-int ram_deinit(uint8_t **ram_buf)
+int ram_deinit(ms_ctx *ms)
 {
-	assert(*ram_buf != NULL);
-	free(*ram_buf);
-	/* XXX: All of this may want to be refactored at some point so
-	 * image_buf isn't a global */
-	free(image_buf);
+	free(ms->ram);
+	free(ms->ram_image);
+	ms->ram = NULL;
+	ms->ram_image = NULL;
 	return 0;
 }
 
-uint8_t ram_read(uint8_t *ram_buf, unsigned int absolute_addr)
+uint8_t ram_read(ms_ctx *ms, unsigned int absolute_addr)
 {
-	return *(ram_buf + absolute_addr);
+	return *(ms->ram + absolute_addr);
 }
 
-int ram_write(uint8_t *ram_buf, unsigned int absolute_addr, uint8_t val)
+int ram_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val)
 {
-	*(ram_buf + absolute_addr) = val;
+	*(ms->ram + absolute_addr) = val;
 	return 0;
 }

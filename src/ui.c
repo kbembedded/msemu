@@ -4,6 +4,7 @@
 #include "config.h"
 #include "fonts.h"
 #include "images.h"
+#include "io.h"
 #include "msemu.h"
 #include <stdio.h>
 #include <SDL2/SDL.h>
@@ -20,11 +21,17 @@ SDL_RWops* stream = NULL;
 // Splashscreen
 SDL_Surface* splashscreen_surface = NULL;
 SDL_Texture* splashscreen_tex = NULL;
-SDL_Rect splashscreen_srcRect = { 0, 0, 0, 0 };
-SDL_Rect splashscreen_dstRect = { 0, 0, 0, 0 };
-TTF_Font* font = NULL;
-SDL_Color font_color = { 0xff, 0xff, 0x00 }; /* Yellow */
+SDL_Rect splashscreen_srcRect = { 0, 0, 320, 128 };
+SDL_Rect splashscreen_dstRect = { 0, 112, LOGICAL_WIDTH, 256 };
 int splashscreen_show = 0;
+
+// Version
+SDL_Surface* version_surface = NULL;
+SDL_Texture* version_tex = NULL;
+SDL_Rect version_srcRect = { 0, 0, 72, 24 };
+SDL_Rect version_dstRect = { LOGICAL_WIDTH - 80, LOGICAL_HEIGHT - 142, 72, 24 };
+TTF_Font* font = NULL;
+SDL_Color font_color = { 0x9d, 0xe0, 0x8c };
 
 // LCD
 SDL_Surface* lcd_surface = NULL;
@@ -38,6 +45,20 @@ SDL_Surface* led_surface = NULL;
 SDL_Texture* led_tex = NULL;
 SDL_Rect led_srcRect = {0, 0 , UI_LED_IMAGE_SIZE, UI_LED_IMAGE_SIZE};
 SDL_Rect led_dstRect = {LOGICAL_WIDTH - 48, LOGICAL_HEIGHT - 96, UI_LED_IMAGE_SIZE, UI_LED_IMAGE_SIZE};
+
+// AC
+#define UI_AC_IMAGE_SIZE 32
+SDL_Surface* ac_surface = NULL;
+SDL_Texture* ac_tex = NULL;
+SDL_Rect ac_srcRect = {0, 0 , UI_AC_IMAGE_SIZE, UI_AC_IMAGE_SIZE};
+SDL_Rect ac_dstRect = {LOGICAL_WIDTH - 80, 72, UI_AC_IMAGE_SIZE, UI_AC_IMAGE_SIZE};
+
+// Battery
+#define UI_BATTERY_IMAGE_SIZE 32
+SDL_Surface* battery_surface = NULL;
+SDL_Texture* battery_tex = NULL;
+SDL_Rect battery_srcRect = {0, 0 , UI_BATTERY_IMAGE_SIZE, UI_BATTERY_IMAGE_SIZE};
+SDL_Rect battery_dstRect = {LOGICAL_WIDTH - 48, 72, UI_BATTERY_IMAGE_SIZE, UI_BATTERY_IMAGE_SIZE};
 
 // Keyboard
 // This table translates PC scancodes to the Mailstation key matrix
@@ -75,7 +96,7 @@ void ui_init(uint32_t* ms_lcd_buffer)
 
 	/* Create/configure window & renderer */
 	window = SDL_CreateWindow(
-		"MailStation Emulator",
+		"MailStation EMUlator",
 		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
 		LOGICAL_WIDTH, LOGICAL_HEIGHT, SDL_WINDOW_RESIZABLE);
 
@@ -87,7 +108,26 @@ void ui_init(uint32_t* ms_lcd_buffer)
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 	SDL_RenderSetLogicalSize(renderer, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
-	/* Load font */
+	/* Prepare the Splashscreen surface */
+	stream = SDL_RWFromConstMem(splash_png, splash_png_size);
+	if (!stream) {
+		printf("Error creating Splashscreen stream: %s\n", SDL_GetError());
+		abort();
+	}
+
+	splashscreen_surface = IMG_LoadPNG_RW(stream);
+	if (!splashscreen_surface) {
+		printf("Error creating Splashscreen surface: %s\n", SDL_GetError());
+		abort();
+	}
+
+	splashscreen_tex = SDL_CreateTextureFromSurface(renderer, splashscreen_surface);
+		if (!splashscreen_tex) {
+		printf("Error creating Splashscreen texture: %s\n", SDL_GetError());
+		abort();
+	}
+
+	/* Prepare the Version surface */
 	stream = SDL_RWFromConstMem(kongtext_ttf, kongtext_ttf_size);
 	if (!stream) {
 		printf("Error creating font stream: %s\n", SDL_GetError());
@@ -100,28 +140,21 @@ void ui_init(uint32_t* ms_lcd_buffer)
 		abort();
 	}
 
-	/* Prepare the splashscreen surface */
-	splashscreen_surface = TTF_RenderText_Blended_Wrapped(
-		font, SPLASH_STR \
-			"F12 to Start", font_color, LOGICAL_WIDTH);
-	if (!splashscreen_surface) {
-		printf("Error creating splashscreen surface: %s\n", TTF_GetError());
+	version_surface = TTF_RenderText_Blended_Wrapped(
+		font, VERSION_STR, font_color, LOGICAL_WIDTH);
+	if (!version_surface) {
+		printf("Error creating Version surface: %s\n", TTF_GetError());
 		abort();
 	}
 
-	splashscreen_tex = SDL_CreateTextureFromSurface(renderer, splashscreen_surface);
-	if (!splashscreen_tex) {
-		printf("Error creating splashscreen texture: %s\n", SDL_GetError());
+	version_tex = SDL_CreateTextureFromSurface(renderer, version_surface);
+	if (!version_tex) {
+		printf("Error creating Version texture: %s\n", SDL_GetError());
 		abort();
 	}
-
-	splashscreen_srcRect.w = splashscreen_surface->w;
-	splashscreen_srcRect.h = splashscreen_surface->h;
-	splashscreen_dstRect.w = splashscreen_surface->w;
-	splashscreen_dstRect.h = splashscreen_surface->h;
 
 	/* Prepare the MailStation LCD surface */
-	lcd_surface = SDL_CreateRGBSurfaceFrom(ms_lcd_buffer, 320, 240, 32, 1280, 0,0,0,0);
+	lcd_surface = SDL_CreateRGBSurfaceFrom(ms_lcd_buffer, 320, 240, 32, 1280, 0, 0, 0, 0);
 	if (!lcd_surface) {
 		printf("Error creating LCD surface: %s\n", SDL_GetError());
 		abort();
@@ -150,23 +183,66 @@ void ui_init(uint32_t* ms_lcd_buffer)
 	if (!led_tex) {
 		printf("Error creating LED texture: %s\n", SDL_GetError());
 	}
+
+	/* Prepare the MailStation AC surface */
+	stream = SDL_RWFromConstMem(ac_png, ac_png_size);
+	if (!stream) {
+		printf("Error creating AC stream: %s\n", SDL_GetError());
+		abort();
+	}
+
+	ac_surface = IMG_LoadPNG_RW(stream);
+	if (!ac_surface) {
+		printf("Error creating AC surface: %s\n", SDL_GetError());
+		abort();
+	}
+
+	ac_tex = SDL_CreateTextureFromSurface(renderer, ac_surface);
+	if (!ac_tex) {
+		printf("Error creating AC texture: %s\n", SDL_GetError());
+	}
+
+	/* Prepare the MailStation Battery surface */
+	stream = SDL_RWFromConstMem(battery_png, battery_png_size);
+	if (!stream) {
+		printf("Error creating Battery stream: %s\n", SDL_GetError());
+		abort();
+	}
+
+	battery_surface = IMG_LoadPNG_RW(stream);
+	if (!battery_surface) {
+		printf("Error creating Battery surface: %s\n", SDL_GetError());
+		abort();
+	}
+
+	battery_tex = SDL_CreateTextureFromSurface(renderer, battery_surface);
+	if (!battery_tex) {
+		printf("Error creating Battery texture: %s\n", SDL_GetError());
+	}
 }
 
 void ui_splashscreen_show()
 {
-	printf("Splashscreen ON\n");
 	splashscreen_show = 1;
 }
 
 void ui_splashscreen_hide()
 {
-	printf("Splashscreen OFF\n");
 	splashscreen_show = 0;
 }
 
 void ui_update_led(uint8_t on)
 {
 	led_srcRect.x = UI_LED_IMAGE_SIZE * on;
+}
+
+void ui_update_ac(uint8_t on){
+	ac_srcRect.x = UI_AC_IMAGE_SIZE * on;
+}
+
+void ui_update_battery(int status)
+{
+	battery_srcRect.x = UI_BATTERY_IMAGE_SIZE * status;
 }
 
 void ui_update_lcd()
@@ -180,25 +256,35 @@ void ui_render()
 {
 	SDL_RenderClear(renderer);
 
-	if (!splashscreen_show) {
+	if (splashscreen_show) {
+		// Render Splashscreen
+		SDL_RenderCopy(
+			renderer, splashscreen_tex,
+			&splashscreen_srcRect, &splashscreen_dstRect);
+		SDL_RenderCopy(
+			renderer, version_tex,
+			&version_srcRect, &version_dstRect);
+	} else {
 		// Render LCD
 		SDL_RenderCopy(
 			renderer, lcd_tex,
 			&lcd_srcRect, &lcd_dstRect);
-
-		// Render LED
-		SDL_RenderCopy(
-			renderer, led_tex,
-			&led_srcRect, &led_dstRect);
 	}
 
-	// We're rendering back to front, so we always check
-	// this last so the splash screen always appears on top.
-	if (splashscreen_show) {
-		SDL_RenderCopy(
-			renderer, splashscreen_tex,
-			&splashscreen_srcRect, &splashscreen_dstRect);
-	}
+	// Render LED
+	SDL_RenderCopy(
+		renderer, led_tex,
+		&led_srcRect, &led_dstRect);
+
+		// Render AC
+	SDL_RenderCopy(
+		renderer, ac_tex,
+		&ac_srcRect, &ac_dstRect);
+
+		// Render Battery
+	SDL_RenderCopy(
+		renderer, battery_tex,
+		&battery_srcRect, &battery_dstRect);
 
 	SDL_RenderPresent(renderer);
 }
@@ -234,6 +320,7 @@ static void ui_set_ms_kbd(ms_ctx* ms, int scancode, int eventtype)
 				break;
 			}
 		}
+
 	}
 }
 
@@ -259,26 +346,25 @@ int ui_kbd_process(ms_ctx *ms)
 			/* First, check to see if F12 was pressed */
 			if (event.key.keysym.sym == SDLK_F12) {
 				if (event.type == SDL_KEYDOWN) {
-					ms->power_button = 1;
-					if (ms->power_state == MS_POWERSTATE_OFF) {
-						printf("POWER ON\n");
-						ms_power_on_reset(ms);
-						ui_splashscreen_hide();
-					}
-				} else {
-					ms->power_button = 0;
+					ms->power_button_n = 0;
+				} else if (event.type == SDL_KEYUP) {
+					ms->power_button_n = 1;
 				}
+				ms_power_hint(ms);
 			}
-
 			/* Keys pressed while right ctrl is held */
 			if (event.key.keysym.mod & KMOD_RCTRL) {
 				if (event.type == SDL_KEYDOWN) {
 					switch (event.key.keysym.sym) {
 					  /* Reset whole system */
 					  case SDLK_r:
-						if (ms->power_state == MS_POWERSTATE_ON) {
-							ms_power_on_reset(ms);
-						}
+						ms_power_on_reset(ms);
+						break;
+					  case SDLK_a:
+						ms_power_ac_set_status(ms, AC_TOGGLE);
+						break;
+					  case SDLK_b:
+						ms_power_batt_set_status(ms, BATT_CYCLE);
 						break;
 					  default:
 						break;

@@ -37,7 +37,15 @@
 #define SLOT4_DEV		0x06
 #define SLOT8_PAGE		0x07
 #define SLOT8_DEV		0x08
+
 #define MISC9			0x09 /* Printer ctrl, pwr ok, pwr btn */
+#define MISC9_AC_GOOD		(1 << 7)
+#define MISC9_BATT_HIGH		(1 << 6)
+#define MISC9_BATT_GOOD		(1 << 5)
+#define MISC9_PWR_BITS		(MISC9_AC_GOOD | MISC9_BATT_HIGH | MISC9_BATT_GOOD)
+#define MISC9_PWR_BTN		(1 << 4)
+#define MISC9_DIR		0x0A
+
 #define RTC_SEC			0x10 /* BCD, ones place seconds */
 #define RTC_10SEC		0x11 /* BCD, tens place seconds */
 #define RTC_MIN			0x12 /* BCD, ones place minutes */
@@ -65,26 +73,26 @@
  * Initialize/free buffer for IO.
  * io_init can be called multiple times, will re-zero buffer if prev. allocated
  *
- * **buf    - Pointer to pointer to buffer to use for flash
+ * *ms			- Pointer to ms_ctx struct
  */
-int io_init(uint8_t **io_buf);
-int io_deinit(uint8_t **io_buf);
+int io_init(ms_ctx *ms);
+int io_deinit(ms_ctx *ms);
 
 /**
  * Return a byte from the Mailstation IO buffer.
  *
- * *buf          - Pointer to buffer for IO
- * absolute_addr - Address in range of IO, 0x00:0xFF
+ * *ms			- Pointer to ms_ctx struct
+ * absolute_addr	- Address in range of IO, 0x00:0xFF
  */
-uint8_t io_read(uint8_t *io_buf, unsigned int absolute_addr);
+uint8_t io_read(ms_ctx *ms, unsigned int absolute_addr);
 
 /**
  * Write a byte to the Mailstation IO buffer.
  *
- * *buf          - Pointer to buffer for IO
- * absolute_addr - Address in range of IO, 0x00:0xFF
- * val           - Byte to write
+ * *ms			- Pointer to ms_ctx struct
+ * absolute_addr	- Address in range of IO, 0x00:0xFF
+ * val			- Byte to write
  */
-int io_write(uint8_t *io_buf, unsigned int absolute_addr, uint8_t val);
+int io_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val);
 
 #endif // __IO_H__
