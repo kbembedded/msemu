@@ -696,6 +696,12 @@ int ms_deinit(ms_ctx *ms, ms_opts *options)
 	lcd_deinit(ms);
 	cf_deinit(ms, options);
 	df_deinit(ms, options);
+	free(options->cf_path);
+	free(options->df_path);
+	free(options->ram_path);
+	options->cf_path = NULL;
+	options->df_path = NULL;
+	options->ram_path = NULL;
 
 	return 0;
 }

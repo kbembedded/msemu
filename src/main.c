@@ -73,6 +73,7 @@ int main(int argc, char** argv)
 {
 	int c;
 	int ret = 0;
+	int len;
 
 	ms_ctx ms;
 
@@ -102,23 +103,43 @@ int main(int argc, char** argv)
 	options.ac_start = AC_GOOD;
 
 	/* Process arguments */
+	/* For each path argument, cf/df/ram, the path will either be
+	 * pre-allocated with a default or NULL. Each time we attempt to update
+	 * the path via arg, be sure to free any allocated memory to prevent
+	 * leaks.
+	 */
 	while ((c = getopt_long(argc, argv,
 	  "hc:d:r:n", long_opts, NULL)) != -1) {
 		switch(c) {
 		  case 'c':
-			options.cf_path = malloc(strlen(optarg)+1);
-			/* TODO: Implement error handling here */
-			strncpy(options.cf_path, optarg, strlen(optarg)+1);
+			len = strlen(optarg)+1;
+			free(options.cf_path);
+			options.cf_path = malloc(len);
+			if (options.cf_path == NULL) {
+				printf("Unable to allocate CF path string\n");
+				exit(EXIT_FAILURE);
+			}
+			strncpy(options.cf_path, optarg, len);
 			break;
 		  case 'd':
-			options.df_path = malloc(strlen(optarg)+1);
-			/* TODO: Implement error handling here */
-			strncpy(options.df_path, optarg, strlen(optarg)+1);
+			len = strlen(optarg)+1;
+			free(options.df_path);
+			options.df_path = malloc(len);
+			if (options.df_path == NULL) {
+				printf("Unable to allocate DF path string\n");
+				exit(EXIT_FAILURE);
+			}
+			strncpy(options.df_path, optarg, len);
 			break;
 		  case 'r':
-			options.ram_path = malloc(strlen(optarg)+1);
-			/* TODO: Implement error handling here */
-			strncpy(options.ram_path, optarg, strlen(optarg)+1);
+			len = strlen(optarg)+1;
+			free(options.ram_path);
+			options.ram_path = malloc(len);
+			if (options.ram_path == NULL) {
+				printf("Unable to allocate RAM path string\n");
+				exit(EXIT_FAILURE);
+			}
+			strncpy(options.ram_path, optarg, len);
 			break;
 		  case 'n':
 			options.df_save_to_disk = 0;
@@ -148,6 +169,7 @@ int main(int argc, char** argv)
 	// Init mailstation w/ options
 	memset(&ms, '\0', sizeof(ms));
 	if (ms_init(&ms, &options) == MS_ERR) return 1;
+	/* TODO: refactor init to return value rather than abort, add deinit */
 	ui_init(ms.lcd_datRGBA8888);
 
 	// Run mailstation
