@@ -28,18 +28,33 @@
  * because this implementation is limited to 256 ports.
  */
 
+struct io_maps {
+	uint8_t *sim;
+	uint8_t *parport;
+};
+
 /* Can be called multiple times, will zero the buffer if *io_buf is not null */
 int io_init(ms_ctx *ms)
 {
-	if (ms->io == NULL) {
-		ms->io = (uint8_t *)calloc(SZ_256, sizeof(uint8_t));
-		if (ms->io == NULL) {
+	struct io_maps *io = (struct io_maps *)ms->io;
+
+	if (io == NULL) {
+		io = malloc(sizeof(struct io_maps));
+		if (io == NULL) {
+			printf("Unable to allocate IO struct\n");
+			exit(EXIT_FAILURE);
+		}
+
+		io->sim = calloc(SZ_256, sizeof(uint8_t));
+		if (io->sim == NULL) {
 			printf("Unable to allocate IO buffer\n");
 			exit(EXIT_FAILURE);
 		}
+
+		ms->io = (void *)io;
 	} else {
 		/* Buffer is already allocated, just zero it out */
-		memset(ms->io, '\0', SZ_256);
+		memset(io->sim, '\0', SZ_256);
 	}
 
 	return MS_OK;
@@ -47,7 +62,10 @@ int io_init(ms_ctx *ms)
 
 int io_deinit(ms_ctx *ms)
 {
-	free(ms->io);
+	struct io_maps *io = (struct io_maps *)ms->io;
+
+	free(io->sim);
+	free(io);
 	ms->io = NULL;
 
 	return MS_OK;
@@ -55,14 +73,18 @@ int io_deinit(ms_ctx *ms)
 
 uint8_t io_read(ms_ctx *ms, unsigned int absolute_addr)
 {
-	assert(ms->io != NULL);
-	return *(ms->io + absolute_addr);
+	struct io_maps *io = (struct io_maps *)ms->io;
+
+	assert(io != NULL);
+	return *(io->sim + absolute_addr);
 }
 
 int io_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val)
 {
-	assert(ms->io != NULL);
-	*(ms->io + absolute_addr) = val;
+	struct io_maps *io = (struct io_maps *)ms->io;
+
+	assert(io != NULL);
+	*(io->sim + absolute_addr) = val;
 
 	return MS_OK;
 }
