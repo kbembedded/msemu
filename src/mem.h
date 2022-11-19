@@ -35,7 +35,17 @@ int ram_deinit(ms_ctx *ms);
  * val           - Command or value to send to dataflash
  */
 int df_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val);
+
+/**
+ * Write directly to specified media, bypasses any command interpretation
+ *
+ * *ms           - Pointer to ms_ctx struct
+ * absolute_addr - Address in range of buffer
+ * val           - Value to send to buffer
+ */
 int ram_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val);
+int df_write_raw(ms_ctx *ms, unsigned int absolute_addr, uint8_t val);
+// cf_write_raw has not been needed thus far
 
 /**
  * Return a byte from the Mailstation dataflash buffer. This does not

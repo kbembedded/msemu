@@ -161,6 +161,8 @@ uint8_t df_read(ms_ctx *ms, unsigned int absolute_addr)
 {
 	volatile uint8_t *wp_track = (ms->df + SZ_512K);
 
+	assert(ms->df != NULL);
+
 	/* See top of file for explanation of code protect and tracking it */
 
 	/* If the address matches the next number in the sequence, advance
@@ -202,6 +204,8 @@ int df_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val)
 	static uint8_t cycle;
 	static uint8_t cmd;
 	volatile uint8_t *wp_track = (ms->df + SZ_512K);
+
+	assert(ms->df != NULL);
 
 	/* ANY write to DF will break the current software protect state
 	 * machine sequence! */
@@ -269,6 +273,22 @@ int df_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val)
 	return MS_OK;
 }
 
+/* Write directly to dataflash buffer
+ *
+ * Used for actions that need to happen outside of the execution of MSFW.
+ * For example, setting a random serial number in the DF when a new file is
+ * created.
+ *
+ * Currently just returns MS_OK
+ */
+int df_write_raw(ms_ctx *ms, unsigned int absolute_addr, uint8_t val)
+{
+	assert(ms->df != NULL);
+
+	*(ms->df + absolute_addr) = val;
+	return MS_OK;
+}
+
 
 /****************************************************
  * Codeflash Functions
@@ -309,11 +329,12 @@ int cf_deinit(ms_ctx *ms, ms_opts *options)
 	free(ms->cf);
 	ms->cf = NULL;
 
-	return 0;
+	return MS_OK;
 }
 
 uint8_t cf_read(ms_ctx *ms, unsigned int absolute_addr)
 {
+	assert(ms->cf != NULL);
 	return *(ms->cf + absolute_addr);
 }
 
@@ -321,7 +342,7 @@ int cf_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val)
 {
 	printf("CF write not implemented!\n");
 
-	return 0;
+	return MS_OK;
 }
 
 
@@ -395,7 +416,7 @@ int ram_init(ms_ctx *ms, ms_opts *options)
 		}
 	}
 
-	return 0;
+	return MS_OK;
 }
 
 int ram_deinit(ms_ctx *ms)
@@ -404,7 +425,7 @@ int ram_deinit(ms_ctx *ms)
 	free(ms->ram_image);
 	ms->ram = NULL;
 	ms->ram_image = NULL;
-	return 0;
+	return MS_OK;
 }
 
 uint8_t ram_read(ms_ctx *ms, unsigned int absolute_addr)
