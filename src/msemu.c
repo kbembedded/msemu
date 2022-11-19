@@ -62,20 +62,15 @@ static unsigned char hex2bcd (unsigned char x)
 static void ms_set_df_rnd_serial(ms_ctx *ms)
 {
 	int i;
-	uint8_t *df_buf = ms->df;
 	uint8_t rnd;
 
-	df_buf += DF_SN_OFFS;
-
-	for (i = 0; i < 15; i++) {
+	for (i = DF_SN_OFFS; i < DF_SN_OFFS+15; i++) {
 		do {
 			rnd = rand();
 		} while (!isalnum(rnd));
-		*df_buf = rnd;
-		df_buf++;
+		df_write_raw(ms, i, rnd);
 	}
-
-	*df_buf = '-';
+	df_write_raw(ms, i, '-');
 }
 
 /* Check if serial number in dataflash buffer is valid for Mailstation
@@ -91,14 +86,12 @@ static void ms_set_df_rnd_serial(ms_ctx *ms)
 static int ms_serial_valid(ms_ctx *ms)
 {
 	int i;
-	uint8_t *df_buf = ms->df;
+	uint8_t val;
 	int ret = MS_OK;
 
-	df_buf += DF_SN_OFFS;
-
-	for (i = 0; i < 16; i++) {
-		if (!isalnum(*df_buf) && *df_buf != '-') ret = MS_ERR;
-		df_buf++;
+	for (i = DF_SN_OFFS; i < DF_SN_OFFS+16; i++) {
+		val = df_read(ms, i);
+		if (!isalnum(val) && val != '-') ret = MS_ERR;
 	}
 
 	return ret;
