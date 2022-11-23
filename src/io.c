@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "msemu.h"
+#include "io_parport.h"
 #include "sizes.h"
 
 
@@ -51,6 +52,8 @@ int io_init(ms_ctx *ms)
 			exit(EXIT_FAILURE);
 		}
 
+		io->parport = pp_init();
+
 		ms->io = (void *)io;
 	} else {
 		/* Buffer is already allocated, just zero it out */
@@ -76,6 +79,8 @@ uint8_t io_read(ms_ctx *ms, unsigned int absolute_addr)
 	struct io_maps *io = (struct io_maps *)ms->io;
 
 	assert(io != NULL);
+	/* XXX: When doing pp_read(), update io->sim DR bits only if DDR
+	 * bits are inputs! */
 	return *(io->sim + absolute_addr);
 }
 
@@ -84,6 +89,8 @@ int io_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val)
 	struct io_maps *io = (struct io_maps *)ms->io;
 
 	assert(io != NULL);
+	/* XXX: When doing pp_write(), write bits only if DDR bits are set to
+	 * outputs!*/
 	*(io->sim + absolute_addr) = val;
 
 	return MS_OK;
