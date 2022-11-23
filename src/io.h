@@ -63,7 +63,8 @@
 #define RTC_CTRL2		0x1E /* Unknown */
 #define RTC_CTRL3		0x1F /* Unknown */
 
-#define PRINT_STATUS		0x21 /* Unknown */
+#define PRINT_CR		0x09 /* Same as MISC9, always & 0x0F for par CR! */
+#define PRINT_SR		0x21 /* Unknown */
 #define PRINT_DDR		0x2C
 #define PRINT_DR		0x2D
 

@@ -4,7 +4,10 @@
 #include <string.h>
 
 #include "msemu.h"
+#include "io.h"
+#include "io_parport.h"
 #include "sizes.h"
+#include "zparlib.h"
 
 
 /* Z80 IO has a number of different use cases with different bus behavior for
@@ -51,6 +54,8 @@ int io_init(ms_ctx *ms)
 			exit(EXIT_FAILURE);
 		}
 
+		io->parport = pp_init();
+
 		ms->io = (void *)io;
 	} else {
 		/* Buffer is already allocated, just zero it out */
@@ -74,16 +79,49 @@ int io_deinit(ms_ctx *ms)
 uint8_t io_read(ms_ctx *ms, unsigned int absolute_addr)
 {
 	struct io_maps *io = (struct io_maps *)ms->io;
+	uint8_t dr, ddr;
 
 	assert(io != NULL);
-	return *(io->sim + absolute_addr);
+
+	switch (absolute_addr) {
+	case PRINT_DR:
+	/* XXX: When doing pp_read(), update io->sim DR bits only if DDR
+	 * bits are inputs! */
+		dr = pp_read(io->parport, ZPAR_DR);
+		ddr = *(io->sim + PRINT_DDR);
+		dr &= ~(ddr);
+		return dr;
+	case PRINT_SR:
+		/* This register matches IBM status reg bits 7:3 */
+		return pp_read(io->parport, ZPAR_SR) & 0xf8;
+	case PRINT_CR:
+		/* This register matches IBM control reg bits 3:0 */
+		return pp_read(io->parport, ZPAR_CR) & 0xf;
+	default:
+		return *(io->sim + absolute_addr);
+	}
 }
 
 int io_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val)
 {
 	struct io_maps *io = (struct io_maps *)ms->io;
+	uint8_t ddr;
 
 	assert(io != NULL);
+	/* XXX: When doing pp_write(), write bits only if DDR bits are set to
+	 * outputs!*/
+	switch (absolute_addr) {
+	case PRINT_DR:
+		ddr = *(io->sim + PRINT_DDR);
+		pp_write(io->parport, ZPAR_DR, val & ddr);
+		break;
+	case PRINT_SR:
+		pp_write(io->parport, ZPAR_SR, val & 0xf8);
+		break;
+	case PRINT_CR:
+		pp_write(io->parport, ZPAR_CR, val & 0x0F);
+		break;
+	}
 	*(io->sim + absolute_addr) = val;
 
 	return MS_OK;
