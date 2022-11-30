@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "io.h"
+#include "io_rtc.h"
 #include "msemu.h"
 #include "sizes.h"
 
@@ -76,6 +78,10 @@ uint8_t io_read(ms_ctx *ms, unsigned int absolute_addr)
 	struct io_maps *io = (struct io_maps *)ms->io;
 
 	assert(io != NULL);
+
+	if (absolute_addr >= RTC_SEC && absolute_addr <= RTC_10YR)
+		return io_rtc_read(absolute_addr);
+
 	return *(io->sim + absolute_addr);
 }
 

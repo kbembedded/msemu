@@ -13,6 +13,7 @@ add_executable(msemu
 	main.c
 	msemu.c
 	io.c
+	io_rtc.c
 	ui.c
 )
 

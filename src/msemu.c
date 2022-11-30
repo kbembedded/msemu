@@ -35,18 +35,6 @@ const char* const ms_dev_map_text[] = {
 	NULL
 };
 
-//----------------------------------------------------------------------------
-//
-//  Convert uint8_t to BCD format
-//
-static unsigned char hex2bcd (unsigned char x)
-{
-	unsigned char y;
-	y = (x / 10) << 4;
-	y = y | (x % 10);
-	return y;
-}
-
 #define DF_SN_OFFS     0x7FFC8
 
 /* Generate and set a random serial number to dataflash buffer that is valid
@@ -350,9 +338,6 @@ Z80EX_BYTE z80ex_pread (
 
 	ms_ctx* ms = (ms_ctx*)user_data;
 
-	time_t theTime;
-	struct tm *rtc_time = NULL;
-
 	uint16_t kbaddr;
 	uint8_t kbresult;
 	int i;
@@ -364,12 +349,8 @@ Z80EX_BYTE z80ex_pread (
 	 * be evaluated for the port number */
 	port &= 0xFF;
 
-	/* Get the time only if we're accessing timer registers */
-	if (port >= RTC_SEC && port <= RTC_10YR) {
-		time( &theTime );
-		rtc_time = localtime(&theTime);
-	}
-
+	/* XXX: This should probably be moved to use ret once the IO read is
+	 * resolved */
 	log_debug(" * IO    R [  %02X] -> %02X\n", port, io_read(ms, port));
 
 	switch (port) {
@@ -409,47 +390,6 @@ Z80EX_BYTE z80ex_pread (
 			break;
 		}
 		ret = ret | (io_read(ms, MISC9) & 0x0F);
-		break;
-
-	  // These are all for the RTC
-	  case RTC_SEC:		//seconds
-		ret = (hex2bcd(rtc_time->tm_sec) & 0x0F);
-		break;
-	  case RTC_10SEC:	//10 seconds
-		ret = ((hex2bcd(rtc_time->tm_sec) & 0xF0) >> 4);
-		break;
-	  case RTC_MIN:		// minutes
-		ret = (hex2bcd(rtc_time->tm_min) & 0x0F);
-		break;
-	  case RTC_10MIN:	// 10 minutes
-		ret = ((hex2bcd(rtc_time->tm_min) & 0xF0) >> 4);
-		break;
-	  case RTC_HR:		// hours
-		ret = (hex2bcd(rtc_time->tm_hour) & 0x0F);
-		break;
-	  case RTC_10HR:	// 10 hours
-		ret = ((hex2bcd(rtc_time->tm_hour) & 0xF0) >> 4);
-		break;
-	  case RTC_DOW:		// day of week
-		ret = rtc_time->tm_wday;
-		break;
-	  case RTC_DOM:		// days
-		ret = (hex2bcd(rtc_time->tm_mday) & 0x0F);
-		break;
-	  case RTC_10DOM:	// 10 days
-		ret = ((hex2bcd(rtc_time->tm_mday) & 0xF0) >> 4);
-		break;
-	  case RTC_MON:		// months
-		ret = (hex2bcd(rtc_time->tm_mon + 1) & 0x0F);
-		break;
-	  case RTC_10MON:	// 10 months
-		ret = ((hex2bcd(rtc_time->tm_mon + 1) & 0xF0) >> 4);
-		break;
-	  case RTC_YR:		// years since 1980
-		ret = (hex2bcd(rtc_time->tm_year + 80) & 0x0F);
-		break;
-	  case RTC_10YR:	// 10s years since 1980
-		ret = ((hex2bcd(rtc_time->tm_year + 80) & 0xF0) >> 4);
 		break;
 
 	  default:
