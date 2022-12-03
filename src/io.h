@@ -95,4 +95,8 @@ uint8_t io_read(ms_ctx *ms, unsigned int absolute_addr);
  */
 int io_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val);
 
+int ms_ioctl_register(ms_ctx *ms, int num, uint8_t (*func)(void *, int, uint8_t), void *dat);
+int ms_ioctl_deregister(ms_ctx *ms, int num);
+int ms_ioctl(ms_ctx *ms, int num, int whatever, uint8_t val);
+
 #endif // __IO_H__
