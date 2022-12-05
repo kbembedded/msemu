@@ -31,8 +31,8 @@
  */
 
 struct _ms_ioctl {
-	int num;
-	uint8_t (*func)(void *, int, uint8_t);
+	int ioctl_num;
+	int (*func)(void *, void *);
 	void *dat;
 	struct _ms_ioctl *next;
 };
@@ -43,17 +43,17 @@ struct io_maps {
 	struct _ms_ioctl *ioctl_list;
 };
 
-int ms_ioctl(ms_ctx *ms, int num, int whatever, uint8_t val)
+int ms_ioctl(ms_ctx *ms, int ioctl_num, void *val)
 {
 	struct io_maps *io = (struct io_maps *)ms->io;
 	struct _ms_ioctl *ioctl_list = io->ioctl_list;
-	int ret = MS_OK;
+	int ret = MS_ERR;
 
 	/* Find matching ioctl number */
 	if (ioctl_list != NULL) {
 		for (;;) {
-			if (num == ioctl_list->num) {
-				ioctl_list->func(ioctl_list->dat, whatever, val);
+			if (ioctl_num == ioctl_list->ioctl_num) {
+				ret = ioctl_list->func(ioctl_list->dat, val);
 				break;
 			}
 
@@ -66,7 +66,7 @@ int ms_ioctl(ms_ctx *ms, int num, int whatever, uint8_t val)
 }
 
 /* Why is this half-assed ioctl system so convoluted? Because why the hell not? */
-int ms_ioctl_register(ms_ctx *ms, int num, uint8_t (*func)(void *, int, uint8_t), void *dat)
+int ms_ioctl_register(ms_ctx *ms, int ioctl_num, int (*func)(void *, void *), void *dat)
 {
 	struct io_maps *io = (struct io_maps *)ms->io;
 	struct _ms_ioctl *ioctl_list = io->ioctl_list;
@@ -77,7 +77,7 @@ int ms_ioctl_register(ms_ctx *ms, int num, uint8_t (*func)(void *, int, uint8_t)
 	 * of a time for our use. */
 	if (ioctl_list != NULL) {
 		for (;;) {
-			if (num == ioctl_list->num) {
+			if (ioctl_num == ioctl_list->ioctl_num) {
 				ret = MS_ERR;
 				goto out;
 			}
@@ -109,14 +109,14 @@ int ms_ioctl_register(ms_ctx *ms, int num, uint8_t (*func)(void *, int, uint8_t)
 
 	/* At this point, we're at a fresh struct and the requested ioctl number
 	 * to register is unique. Add this info to the struct */
-	ioctl_list->num = num;
+	ioctl_list->ioctl_num = ioctl_num;
 	ioctl_list->func = func;
 	ioctl_list->dat = dat;
 out:
 	return ret;
 }
 
-int ms_ioctl_deregister(ms_ctx *ms, int num)
+int ms_ioctl_deregister(ms_ctx *ms, int ioctl_num)
 {
 	struct io_maps *io = (struct io_maps *)ms->io;
 	struct _ms_ioctl *ioctl_list = io->ioctl_list;
@@ -129,7 +129,7 @@ int ms_ioctl_deregister(ms_ctx *ms, int num)
 		/* Walk through the list until we find a matching ioctl number.
 		 * If we traverse to a next, save the last in a pointer so we
 		 * can stitch the list back together. */
-		if (ioctl_list->num == num) {
+		if (ioctl_list->ioctl_num == ioctl_num) {
 			/* If next is real and prev is not, then the first
 			 * member needs to be removed. Save next, free the
 			 * root of the struct, and set ms->io->ioctl_list
@@ -189,8 +189,9 @@ int io_init(ms_ctx *ms)
 		/* The _ms_ioctl struct is allocted with the first register call */
 		io->ioctl_list = NULL;
 
-
 		ms->io = (void *)io;
+
+		/* Call other IO sub group init functions */
 		ioctl_test_init(ms);
 	} else {
 		/* Buffer is already allocated, just zero it out */
