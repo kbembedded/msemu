@@ -39,6 +39,7 @@ struct _ms_ioctl {
 
 struct io_maps {
 	uint8_t *sim;
+	uint8_t *power;
 	uint8_t *parport;
 	struct _ms_ioctl *ioctl_list;
 };
@@ -180,19 +181,19 @@ int io_init(ms_ctx *ms)
 			exit(EXIT_FAILURE);
 		}
 
+		memset(io, '\0', sizeof(struct io_maps));
+
 		io->sim = calloc(SZ_256, sizeof(uint8_t));
 		if (io->sim == NULL) {
 			printf("Unable to allocate IO buffer\n");
 			exit(EXIT_FAILURE);
 		}
 
-		/* The _ms_ioctl struct is allocted with the first register call */
-		io->ioctl_list = NULL;
-
 		ms->io = (void *)io;
 
 		/* Call other IO sub group init functions */
 		ioctl_test_init(ms);
+		io->power = io_power_init(ms);
 	} else {
 		/* Buffer is already allocated, just zero it out */
 		memset(io->sim, '\0', SZ_256);

@@ -326,6 +326,7 @@ static void ui_set_ms_kbd(ms_ctx* ms, int scancode, int eventtype)
 
 int ui_kbd_process(ms_ctx *ms)
 {
+	static uint8_t val;
 
 	SDL_Event event;
 	// Check SDL events
@@ -366,7 +367,11 @@ int ui_kbd_process(ms_ctx *ms)
 					  case SDLK_b:
 						ms_power_batt_set_status(ms, BATT_CYCLE);
 						break;
+					  case SDLK_p:
+						ms_ioctl(ms, 1, &val);
+						break;
 					  default:
+						printf("val is currently 0x%x\n", val);
 						break;
 					}
 				}

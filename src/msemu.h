@@ -8,10 +8,6 @@
 #define MS_OK    0
 #define MS_ERR   1
 
-// Power state constants
-#define MS_POWERSTATE_ON  1
-#define MS_POWERSTATE_OFF 0
-
 enum ms_dev_map {
 	CF    = 0x00,
 	RAM   = 0x01,
@@ -21,19 +17,6 @@ enum ms_dev_map {
 	MODEM = 0x05,
 
 	DEV_CNT,
-};
-
-enum ms_ac_status {
-	AC_FAIL = 0,
-	AC_GOOD = 1,
-	AC_TOGGLE,
-};
-
-enum ms_batt_status {
-	BATT_DEPLETE,
-	BATT_LOW,
-	BATT_HIGH,
-	BATT_CYCLE,
 };
 
 typedef struct ms_ctx {
@@ -68,10 +51,10 @@ typedef struct ms_ctx {
 	 */
 
 	// State of the AC adapter
-	int ac_status;
+	//int ac_status;
 
 	// State of the battery
-	int batt_status;
+	//int batt_status;
 
 	// State of the power button
 	/* This is not in the keyboard envelope, and is instead directly
@@ -81,7 +64,7 @@ typedef struct ms_ctx {
 	 * scancode when needed. This button is active low and its status is
 	 * returned in P9.4
 	 */
-	int power_button_n;
+	//int power_button_n;
 } ms_ctx;
 
 typedef struct ms_opts {

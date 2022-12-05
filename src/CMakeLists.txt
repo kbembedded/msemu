@@ -14,6 +14,7 @@ add_executable(msemu
 	msemu.c
 	io.c
 	io_rtc.c
+	io_ioctltest.c
 	ui.c
 )
 
