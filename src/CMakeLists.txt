@@ -13,7 +13,9 @@ add_executable(msemu
 	main.c
 	msemu.c
 	io.c
+	io_parport.c
 	ui.c
+	zparlib.c
 )
 
 if (BUILD_DEPENDENCIES)
@@ -52,6 +54,7 @@ target_link_libraries(msemu
 	SDL2_ttf
 	z80ex
 	z80ex_dasm
+	zmq
 )
 
 function(create_resources dir output)
