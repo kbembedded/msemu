@@ -370,8 +370,6 @@ Z80EX_BYTE z80ex_pread (
 		rtc_time = localtime(&theTime);
 	}
 
-	log_debug(" * IO    R [  %02X] -> %02X\n", port, io_read(ms, port));
-
 	switch (port) {
 	  case KEYBOARD:// emulate keyboard matrix output
 		// keyboard row is 10 bits wide, P1.x = low bits, P2.0-1 = high bits
@@ -456,6 +454,8 @@ Z80EX_BYTE z80ex_pread (
 		ret = io_read(ms, port);
 		break;
 	}
+
+	log_debug(" * IO    R [  %02X] -> %02X\n", port, ret);
 
 	return ret;
 }
