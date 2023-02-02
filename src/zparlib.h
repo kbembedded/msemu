@@ -80,6 +80,9 @@ int zpar_iow(void *zmq_handle, uint8_t reg, uint8_t val, int flags);
 int zpar_iow_set(void *zmq_handle, uint8_t reg, uint8_t bits, int flags);
 int zpar_iow_clr(void *zmq_handle, uint8_t reg, uint8_t bits, int flags);
 
+/* Debugging */
+int zpar_dump_state(void *zmq_handle);
+
 #endif // __ZPARLIB_H__
 
 

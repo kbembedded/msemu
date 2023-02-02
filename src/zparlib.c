@@ -347,6 +347,9 @@ int zpar_write(void *handle, struct pardat *pd, int flags)
 	 * Note that the buffer is not stored cable-encoded, this means that
 	 * when pd is null, the zmqh->tx buffer must first be copied,
 	 * cable-encoded, and then sent.
+	 *
+	 * It is necessary to store the not cable_encoded buffer since the iow
+	 * functions can be used to modify the buffer and then send it out.
 	 */
 	if (pd == NULL) {
 		memcpy(&pd_tmp, zmqh->tx, sizeof(struct pardat));
@@ -368,3 +371,19 @@ void zpar_deinit(void *handle)
 	zmq_conn_deinit(handle);
 }
 
+int zpar_dump_state(void *handle)
+{
+	struct zmq_handle *zmqh = handle;
+	//struct pardat pd_tmp;
+
+	/* The RX buffer is already cable_decoded, however, the TX buffer
+	 * is stored not cable encoded and must be switched here*/
+	//memcpy(&pd_tmp, zmqh->tx, sizeof(struct pardat));
+	//cable_encode(zmqh, &pd_tmp);
+	printf("TX buf:\nDR: 0x%02X; SR: 0x%02X, CR: 0x%02X\n",
+		zmqh->tx->zpar_dat, zmqh->tx->zpar_status, zmqh->tx->zpar_ctrl);
+	printf("RX buf:\nDR: 0x%02X; SR: 0x%02X, CR: 0x%02X\n",
+		zmqh->rx->zpar_dat, zmqh->rx->zpar_status, zmqh->rx->zpar_ctrl);
+
+	return 0;
+}
