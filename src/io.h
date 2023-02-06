@@ -87,6 +87,8 @@ int io_deinit(ms_ctx *ms);
  */
 uint8_t io_read(ms_ctx *ms, unsigned int absolute_addr);
 
+int io_parport_dump(ms_ctx *ms);
+
 /**
  * Write a byte to the Mailstation IO buffer.
  *

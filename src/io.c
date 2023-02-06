@@ -106,6 +106,7 @@ int io_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val)
 {
 	struct io_maps *io = (struct io_maps *)ms->io;
 	uint8_t ddr;
+	int rc = sizeof(struct pardat);
 
 	assert(io != NULL);
 	/* XXX: When doing pp_write(), write bits only if DDR bits are set to
@@ -113,16 +114,25 @@ int io_write(ms_ctx *ms, unsigned int absolute_addr, uint8_t val)
 	switch (absolute_addr) {
 	case PRINT_DR:
 		ddr = *(io->sim + PRINT_DDR);
-		pp_write(io->parport, ZPAR_DR, val & ddr);
+		rc = pp_write(io->parport, ZPAR_DR, val & ddr);
 		break;
 	case PRINT_SR:
-		pp_write(io->parport, ZPAR_SR, val & 0xf8);
+		rc = pp_write(io->parport, ZPAR_SR, val & 0xf8);
 		break;
 	case PRINT_CR:
-		pp_write(io->parport, ZPAR_CR, val & 0x0F);
+		rc = pp_write(io->parport, ZPAR_CR, val & 0x0F);
 		break;
 	}
 	*(io->sim + absolute_addr) = val;
+	if (rc != sizeof(struct pardat))
+		zpar_dump_state(io->parport);
 
 	return MS_OK;
+}
+
+int io_parport_dump(ms_ctx *ms)
+{
+	struct io_maps *io = (struct io_maps *)ms->io;
+	zpar_dump_state(io->parport);
+	return 0;
 }
