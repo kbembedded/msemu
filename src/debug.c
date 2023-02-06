@@ -57,6 +57,7 @@ static void set_bpc(void *pc);
 static void set_bmw(void *addr);
 static void set_bmr(void *addr);
 static void examine(void *nan);
+static void parport(void *nan);
 static void trace_on(void *nan);
 static void trace_off(void *nan);
 static void dbg_on(void *nan);
@@ -78,6 +79,7 @@ static const struct cmdtable cmds[] = {
 	{ "mw", 2, mw, "Edit memory at address, \'mw <addr> <val>\' "
 	  "(UNIMPLEMENTED)", int_arg },
 	{ "e", 1, examine, "[E]xamine current register state", no_arg },
+	{ "p", 1, parport, "[P]rint parport state", no_arg },
 	{ "dbgoff", 5, dbg_off, "Disable debug output during exec", no_arg },
 	{ "dbgon", 4, dbg_on, "Enable debug output during exec", no_arg },
 	{ "troff", 5, trace_off, "Disable trace output during exec", no_arg },
@@ -205,6 +207,13 @@ static void dump_stack(void *nan)
 		sp++;
 	};
 
+}
+
+static void parport(void *nan)
+{
+	io_parport_dump(ms);
+	io_read(ms, PRINT_DR);
+	io_parport_dump(ms);
 }
 
 static void examine(void *nan)
