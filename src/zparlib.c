@@ -36,6 +36,7 @@ static void *zmq_conn_init(const struct conn_opts *opts)
 {
 	struct zmq_handle *zmqh = NULL;
 	const int zmqtrue = 1;
+	const int zmqnolimit = 0;
 	char *pripubstr = NULL;
 	char *hostsubstr = NULL;
 	char *secpubstr = NULL;
@@ -76,9 +77,15 @@ static void *zmq_conn_init(const struct conn_opts *opts)
 	zmqh->zmq_sub = zmq_socket(zmqh->zmq_ctx, ZMQ_SUB);
 
 	/* Only keep the most recent message */
-	zmq_setsockopt(zmqh->zmq_sub, ZMQ_CONFLATE, &zmqtrue, sizeof(zmqtrue));
-	zmq_setsockopt(zmqh->zmq_pub, ZMQ_CONFLATE, &zmqtrue, sizeof(zmqtrue));
+	/* XXX: Setting conflate would be ideal, but, seems to break and drop
+	 * packets on rare occassion. Enough to break all of zpar */
+	//zmq_setsockopt(zmqh->zmq_sub, ZMQ_CONFLATE, &zmqtrue, sizeof(zmqtrue));
+	//zmq_setsockopt(zmqh->zmq_pub, ZMQ_CONFLATE, &zmqtrue, sizeof(zmqtrue));
 	/* XXX: Error checking with teardown on failure */
+
+	/* Set no limit on senv/recv high water mark */
+	//zmq_setsockopt(zmqh->zmq_sub, ZMQ_RCVHWM, &zmqnolimit, sizeof(zmqtrue));
+	//zmq_setsockopt(zmqh->zmq_pub, ZMQ_SNDHWM, &zmqnolimit, sizeof(zmqtrue));
 
 	/* Subscribe to all events */
 	zmq_setsockopt(zmqh->zmq_sub, ZMQ_SUBSCRIBE, "", 0);
@@ -226,13 +233,22 @@ int zpar_read(void *zmq_handle, struct pardat **pd, int flags)
 
 	/* Read bytes in to allocated struct. If no data ready, struct is
 	 * untouched. In either case, update the provided pointer */
-	rc = zmq_recv(zmqh->zmq_sub, zmqh->rx, sizeof(struct pardat),
+	/* XXX: ZMQ_CONFLATE would be the correct thing to do here, however,
+	 * in practice it has been observed to lose data sometimes. As a
+	 * workaround, read until there is no more data just so we get the
+	 * latest wire state.
+	 */
+	do {
+		rc = zmq_recv(zmqh->zmq_sub, zmqh->rx, sizeof(struct pardat),
 			(flags == ZPAR_DONTWAIT) ? ZMQ_DONTWAIT : 0);
+		if (rc == -1 && zmq_errno() != EAGAIN)
+			printf("Error receiving: %s\n", zmq_strerror(zmq_errno()));
 
-	if (rc != -1) {
-		/* Only decode a received packet once */
-		cable_decode(zmqh, zmqh->rx);
-	}
+		if (rc != -1) {
+			/* Only decode a received packet once */
+			cable_decode(zmqh, zmqh->rx);
+		}
+	} while (rc != -1);
 
 	if (zmqh->rx->refresh) {
 		/* Always do this as a DONTWAIT. The reason being that we don't
@@ -356,11 +372,15 @@ int zpar_write(void *handle, struct pardat *pd, int flags)
 		cable_encode(zmqh, &pd_tmp);
 		rc = zmq_send(zmqh->zmq_pub, &pd_tmp, sizeof(struct pardat),
 			(flags == ZPAR_DONTWAIT) ? ZMQ_DONTWAIT : 0);
+		if (rc == -1)
+			printf("Error sending: %s\n", zmq_strerror(zmq_errno()));
 	} else {
 		memcpy(zmqh->tx, pd, sizeof(struct pardat));
 		cable_encode(zmqh, pd);
 		rc = zmq_send(zmqh->zmq_pub, pd, sizeof(struct pardat),
 			(flags == ZPAR_DONTWAIT) ? ZMQ_DONTWAIT : 0);
+		if (rc == -1)
+			printf("Error sending: %s\n", zmq_strerror(zmq_errno()));
 	}
 
 	return rc;
