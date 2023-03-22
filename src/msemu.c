@@ -527,21 +527,21 @@ void z80ex_pwrite (
 	  // Optimizations for mread by calculating dev/page at IO write
 	  case SLOT4_DEV:
 		ms->slot4_dev = val & 0xF;
-		ms->slot4_page_offs = (io_read(ms->io, SLOT4_PAGE) * 0x4000);
-		io_write(ms->io, port, val);
+		ms->slot4_page_offs = (io_read(ms, SLOT4_PAGE) * 0x4000);
+		io_write(ms, port, val);
 		break;
 	  case SLOT4_PAGE:
 		ms->slot4_page_offs = (val * 0x4000);
-		io_write(ms->io, port, val);
+		io_write(ms, port, val);
 		break;
 	  case SLOT8_DEV:
 		ms->slot8_dev = val & 0xF;
-		ms->slot8_page_offs = (io_read(ms->io, SLOT8_PAGE) * 0x4000);
-		io_write(ms->io, port, val);
+		ms->slot8_page_offs = (io_read(ms, SLOT8_PAGE) * 0x4000);
+		io_write(ms, port, val);
 		break;
 	  case SLOT8_PAGE:
 		ms->slot8_page_offs = (val * 0x4000);
-		io_write(ms->io, port, val);
+		io_write(ms, port, val);
 		break;
 
 	  // otherwise just save written value
