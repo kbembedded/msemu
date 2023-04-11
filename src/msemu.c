@@ -291,17 +291,8 @@ void z80ex_mwrite(
 	 */
 	switch (slot) {
 	  case 0:
-		/* P28.3, if set, overrides CFp0 in Slot0 to RAMp1. This is
-		 * a mod that Fyber did originally and, until there is a reason
-		 * to change it for real hardware, we can leave it here for
-		 * testing purposes */
-		if (io_read(ms, UNKNOWN0x28) & 0x8) {
-			dev = RAM;
-			page = 1;
-		} else {
-			dev = CF;
-			page = 0;
-		}
+		dev = CF;
+		page = 0;
 		break;
 	  /* TODO: Add page range check */
 	  case 1:
@@ -318,6 +309,14 @@ void z80ex_mwrite(
 		break;
 	}
 
+	/* P28.3, if set, sets all CF access to RAM with address 14, aka 0x4000,
+	 * aka OR page 1. Any other accesses are unaffected. */
+	if (io_read(ms, UNKNOWN0x28) & 0x8) {
+		if (dev == CF) {
+			dev = RAM;
+			page |= 1;
+		}
+	}
 
 	switch (dev) {
 	/* Nearly all read functions are passed an absolute address inside the
